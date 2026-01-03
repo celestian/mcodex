@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from docopt import docopt
+
+from mcodex.services.author import author_add, author_list
+from mcodex.services.create_text import create_text
+
+__version__ = "0.1.0"
+
+_DOC = """
+mcodex
+
+Usage:
+  mcodex create <title> [--root=<dir>] --author=<nickname>...
+  mcodex author add <nickname> <first_name> <last_name> <email>
+  mcodex author list
+  mcodex (-h | --help)
+  mcodex --version
+
+Options:
+  --root=<dir>         Target directory where the new text folder will be created
+                       [default: .]
+  --author=<nickname>  Author nickname (repeatable).
+  -h --help            Show this screen.
+  --version            Show version.
+
+Notes:
+  Values with spaces must be quoted, e.g.:
+    mcodex author add jan "Jan" "Novák" jan@example.com
+"""
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = docopt(_DOC, argv=argv, version=f"mcodex {__version__}")
+
+    if args["author"] and args["add"]:
+        author_add(
+            nickname=args["<nickname>"],
+            first_name=args["<first_name>"],
+            last_name=args["<last_name>"],
+            email=args["<email>"],
+        )
+        return 0
+
+    if args["author"] and args["list"]:
+        author_list()
+        return 0
+
+    if args["create"]:
+        title: str = args["<title>"]
+        root_dir: str = args["--root"]
+        nicknames: list[str] = args["--author"]
+        create_text(title=title, root=Path(root_dir), author_nicknames=nicknames)
+        return 0
+
+    raise AssertionError("Unhandled command arguments.")
