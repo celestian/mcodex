@@ -4,8 +4,9 @@ from pathlib import Path
 
 from docopt import docopt
 
-from mcodex.cli_utils import resolve_text_dir
+from mcodex.cli_utils import locate_text_dir
 from mcodex.services.author import author_add, author_list, author_remove
+from mcodex.services.build import build_pdf
 from mcodex.services.create_text import create_text
 from mcodex.services.snapshot import snapshot_create, snapshot_list
 from mcodex.services.status import show_status
@@ -23,6 +24,7 @@ Usage:
   mcodex author list
   mcodex text author add <text_dir> <nickname>
   mcodex text author remove <text_dir> <nickname>
+  mcodex build [<slug>] [<version>] [--root=<dir>]
   mcodex snapshot create <stage> [<text_dir>] [--note=<text>]
   mcodex snapshot list [<text_dir>]
   mcodex status [<text_dir>]
@@ -30,14 +32,21 @@ Usage:
   mcodex --version
 
 Options:
-  --root=<dir>   Target directory where the new text folder will be created
+  --root=<dir>   Target directory where the new text folder will be created.
+                 Used by `create` and as a lookup root for `build`.
                  [default: .]
   --author=<nickname>  Author nickname (repeatable).
   --note=<text>  Optional note stored with the snapshot.
   -h --help      Show this screen.
   --version      Show version.
 
-Stages:
+Build:
+  <slug> is the text folder name under --root (default: .).
+  <version> is '.' for worktree, or a snapshot label.
+  When run inside a text directory, a single positional arg is treated
+  as <version>.
+
+Snapshot stages:
   draft | preview | rc | final | published
 """
 
@@ -78,7 +87,23 @@ def main(argv: list[str] | None = None) -> int:
         author_list()
         return 0
 
+    if args["build"]:
+        root = Path(args["--root"]).expanduser().resolve()
+        slug = args["<slug>"]
+        version = args["<version>"]
+
+        text_dir, resolved_version = locate_text_dir(
+            root=root,
+            slug=slug,
+            version=version,
+        )
+        out = build_pdf(text_dir=text_dir, version=resolved_version)
+        print(out)
+        return 0
+
     if args["snapshot"] and args["create"]:
+        from mcodex.cli_utils import resolve_text_dir
+
         text_dir = resolve_text_dir(args["<text_dir>"])
         snap_dir = snapshot_create(
             text_dir=text_dir,
@@ -89,11 +114,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args["snapshot"] and args["list"]:
+        from mcodex.cli_utils import resolve_text_dir
+
         text_dir = resolve_text_dir(args["<text_dir>"])
         snapshot_list(text_dir=text_dir)
         return 0
 
     if args["status"]:
+        from mcodex.cli_utils import resolve_text_dir
+
         text_dir = resolve_text_dir(args["<text_dir>"])
         show_status(text_dir=text_dir)
         return 0

@@ -72,7 +72,7 @@ def _next_number(text_dir: Path, stage: str) -> int:
 
 def _ignore_for_copy(_: str, names: list[str]) -> set[str]:
     ignore = {".snapshot", ".git", "__pycache__"}
-    ignore.update({"build", "exports"})
+    ignore.update({"build", "exports", "documents"})
     return {n for n in names if n in ignore}
 
 
