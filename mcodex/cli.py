@@ -4,6 +4,7 @@ from pathlib import Path
 
 from docopt import docopt
 
+from mcodex.cli_utils import resolve_text_dir
 from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.create_text import create_text
 from mcodex.services.snapshot import snapshot_create, snapshot_list
@@ -22,9 +23,9 @@ Usage:
   mcodex author list
   mcodex text author add <text_dir> <nickname>
   mcodex text author remove <text_dir> <nickname>
-  mcodex snapshot create <text_dir> <stage> [--note=<text>]
-  mcodex snapshot list <text_dir>
-  mcodex status <text_dir>
+  mcodex snapshot create [<text_dir>] <stage> [--note=<text>]
+  mcodex snapshot list [<text_dir>]
+  mcodex status [<text_dir>]
   mcodex (-h | --help)
   mcodex --version
 
@@ -35,10 +36,6 @@ Options:
   --note=<text>  Optional note stored with the snapshot.
   -h --help      Show this screen.
   --version      Show version.
-
-Notes:
-  Values with spaces must be quoted, e.g.:
-    mcodex author add jan "Jan" "Novák" jan@example.com
 
 Stages:
   draft | preview | rc | final | published
@@ -66,7 +63,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args["text"] and args["author"] and args["add"]:
-        text_author_add(text_dir=Path(args["<text_dir>"]), nickname=args["<nickname>"])
+        text_author_add(
+            text_dir=Path(args["<text_dir>"]),
+            nickname=args["<nickname>"],
+        )
         return 0
 
     if args["text"] and args["author"] and args["remove"]:
@@ -77,8 +77,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args["snapshot"] and args["create"]:
+        text_dir = resolve_text_dir(args["<text_dir>"])
         snap_dir = snapshot_create(
-            text_dir=Path(args["<text_dir>"]),
+            text_dir=text_dir,
             stage=args["<stage>"],
             note=args["--note"],
         )
@@ -86,18 +87,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args["snapshot"] and args["list"]:
-        snapshot_list(text_dir=Path(args["<text_dir>"]))
+        text_dir = resolve_text_dir(args["<text_dir>"])
+        snapshot_list(text_dir=text_dir)
         return 0
 
     if args["status"]:
-        show_status(text_dir=Path(args["<text_dir>"]))
+        text_dir = resolve_text_dir(args["<text_dir>"])
+        show_status(text_dir=text_dir)
         return 0
 
     if args["create"] and not args["snapshot"]:
-        title: str = args["<title>"]
-        root_dir: str = args["--root"]
-        nicknames: list[str] = args["--author"]
-        create_text(title=title, root=Path(root_dir), author_nicknames=nicknames)
+        create_text(
+            title=args["<title>"],
+            root=Path(args["--root"]),
+            author_nicknames=args["--author"],
+        )
         return 0
 
     raise AssertionError("Unhandled command arguments.")

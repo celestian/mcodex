@@ -72,3 +72,28 @@ def step_metadata_not_contains_author(context, slug: str, nickname: str) -> None
 
     found = any(isinstance(a, dict) and a.get("nickname") == nickname for a in authors)
     assert not found, f"Author {nickname} unexpectedly present in metadata authors."
+
+
+@then('running "{command}" fails with "{message}"')
+def step_run_fails_with(context, command: str, message: str) -> None:
+    import shlex
+    import subprocess
+
+    args = shlex.split(command)
+    completed = subprocess.run(
+        args,
+        cwd=context.workdir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    context.last = completed
+
+    assert completed.returncode != 0, (
+        "Expected command to fail but it succeeded:\n"
+        f"  cmd: {command}\n"
+        f"  out: {completed.stdout}\n"
+        f"  err: {completed.stderr}\n"
+    )
+    combined = (completed.stdout or "") + (completed.stderr or "")
+    assert message in combined, combined
