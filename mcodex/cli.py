@@ -23,7 +23,7 @@ Usage:
   mcodex author list
   mcodex text author add <text_dir> <nickname>
   mcodex text author remove <text_dir> <nickname>
-  mcodex snapshot create [<text_dir>] <stage> [--note=<text>]
+  mcodex snapshot create <stage> [<text_dir>] [--note=<text>]
   mcodex snapshot list [<text_dir>]
   mcodex status [<text_dir>]
   mcodex (-h | --help)
@@ -45,23 +45,8 @@ Stages:
 def main(argv: list[str] | None = None) -> int:
     args = docopt(_DOC, argv=argv, version=f"mcodex {__version__}")
 
-    if args["author"] and args["add"]:
-        author_add(
-            nickname=args["<nickname>"],
-            first_name=args["<first_name>"],
-            last_name=args["<last_name>"],
-            email=args["<email>"],
-        )
-        return 0
-
-    if args["author"] and args["remove"]:
-        author_remove(nickname=args["<nickname>"])
-        return 0
-
-    if args["author"] and args["list"]:
-        author_list()
-        return 0
-
+    # IMPORTANT: "text author ..." also sets args["author"] to True.
+    # Handle the more specific "text author" commands first.
     if args["text"] and args["author"] and args["add"]:
         text_author_add(
             text_dir=Path(args["<text_dir>"]),
@@ -74,6 +59,23 @@ def main(argv: list[str] | None = None) -> int:
             text_dir=Path(args["<text_dir>"]),
             nickname=args["<nickname>"],
         )
+        return 0
+
+    if args["author"] and args["add"] and not args["text"]:
+        author_add(
+            nickname=args["<nickname>"],
+            first_name=args["<first_name>"],
+            last_name=args["<last_name>"],
+            email=args["<email>"],
+        )
+        return 0
+
+    if args["author"] and args["remove"] and not args["text"]:
+        author_remove(nickname=args["<nickname>"])
+        return 0
+
+    if args["author"] and args["list"] and not args["text"]:
+        author_list()
         return 0
 
     if args["snapshot"] and args["create"]:

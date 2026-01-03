@@ -92,6 +92,7 @@ case "$COMMAND" in
             -czf mcodex.tar.gz \
                 mcodex/ \
                 tests/ \
+                features \
                 README.md \
                 tool-box.sh \
                 pyproject.toml \

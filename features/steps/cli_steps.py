@@ -8,6 +8,10 @@ import yaml
 from behave import given, then, when
 
 
+def _normalize_command(command: str) -> str:
+    return command.replace('\\"', '"').replace("\\'", "'")
+
+
 @given("an empty mcodex config")
 def step_empty_config(context) -> None:
     context.cfg_path.parent.mkdir(parents=True, exist_ok=True)
@@ -17,6 +21,7 @@ def step_empty_config(context) -> None:
 
 @when('I run "{command}"')
 def step_run_command(context, command: str) -> None:
+    command = _normalize_command(command)
     args = shlex.split(command)
 
     completed = subprocess.run(
@@ -76,10 +81,9 @@ def step_metadata_not_contains_author(context, slug: str, nickname: str) -> None
 
 @then('running "{command}" fails with "{message}"')
 def step_run_fails_with(context, command: str, message: str) -> None:
-    import shlex
-    import subprocess
-
+    command = _normalize_command(command)
     args = shlex.split(command)
+
     completed = subprocess.run(
         args,
         cwd=context.workdir,
