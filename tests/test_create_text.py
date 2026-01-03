@@ -59,6 +59,7 @@ def test_create_text_creates_structure_and_metadata(tmp_path: Path) -> None:
     assert (target / "metadata.yaml").exists()
 
     data = yaml.safe_load((target / "metadata.yaml").read_text(encoding="utf-8"))
+    assert data["metadata_version"] == 1
     assert data["title"] == "Článek o něčem"
     assert data["slug"] == "clanek_o_necem"
     assert isinstance(data["id"], str) and data["id"]

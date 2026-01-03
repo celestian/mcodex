@@ -10,6 +10,7 @@ from pathlib import Path
 import yaml
 
 from mcodex.config import load_authors
+from mcodex.metadata import LATEST_METADATA_VERSION
 from mcodex.models import Author, TextMetadata
 
 _SLUG_ALLOWED_RE = re.compile(r"[^a-z0-9_]+")
@@ -37,6 +38,7 @@ def normalize_title(title: str) -> str:
 
 def _write_metadata(path: Path, meta: TextMetadata) -> None:
     payload = asdict(meta)
+    payload["metadata_version"] = LATEST_METADATA_VERSION
     payload["created_at"] = meta.created_at.isoformat()
     out = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
     path.write_text(out, encoding="utf-8")

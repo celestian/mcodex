@@ -21,7 +21,7 @@ def patch_config_path(monkeypatch: pytest.MonkeyPatch, config_path: Path) -> Non
     monkeypatch.setattr(config_module, "default_config_path", lambda: config_path)
 
 
-def test_text_author_add_and_remove(tmp_path: Path) -> None:
+def test_text_author_add_and_remove_upgrades_metadata(tmp_path: Path) -> None:
     author_add(
         nickname="Novy",
         first_name="Jan",
@@ -31,6 +31,8 @@ def test_text_author_add_and_remove(tmp_path: Path) -> None:
 
     text_dir = tmp_path / "text1"
     text_dir.mkdir()
+
+    # Intentionally omit metadata_version (v0) to test upgrade on load.
     (text_dir / "metadata.yaml").write_text(
         yaml.safe_dump(
             {
@@ -49,11 +51,13 @@ def test_text_author_add_and_remove(tmp_path: Path) -> None:
     text_author_add(text_dir=text_dir, nickname="Novy")
 
     data = yaml.safe_load((text_dir / "metadata.yaml").read_text(encoding="utf-8"))
+    assert data["metadata_version"] == 1
     assert [a["nickname"] for a in data["authors"]] == ["Novy"]
 
     text_author_remove(text_dir=text_dir, nickname="Novy")
 
     data2 = yaml.safe_load((text_dir / "metadata.yaml").read_text(encoding="utf-8"))
+    assert data2["metadata_version"] == 1
     assert data2["authors"] == []
 
 

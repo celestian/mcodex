@@ -3,27 +3,13 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
-import yaml
-
 from mcodex.config import load_authors
+from mcodex.metadata import load_metadata, write_metadata
 from mcodex.models import Author
 
 
 def _metadata_path(text_dir: Path) -> Path:
     return text_dir.expanduser().resolve() / "metadata.yaml"
-
-
-def _load_metadata(path: Path) -> dict:
-    if not path.exists():
-        raise FileNotFoundError(f"Metadata file not found: {path}")
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-
-def _write_metadata(path: Path, data: dict) -> None:
-    path.write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
 
 
 def _author_from_config(nickname: str) -> Author:
@@ -35,7 +21,7 @@ def _author_from_config(nickname: str) -> Author:
 
 def text_author_add(*, text_dir: Path, nickname: str) -> None:
     meta_path = _metadata_path(text_dir)
-    data = _load_metadata(meta_path)
+    data = load_metadata(meta_path)
 
     author = _author_from_config(nickname)
 
@@ -53,12 +39,12 @@ def text_author_add(*, text_dir: Path, nickname: str) -> None:
         return
 
     authors.append(asdict(author))
-    _write_metadata(meta_path, data)
+    write_metadata(meta_path, data)
 
 
 def text_author_remove(*, text_dir: Path, nickname: str) -> None:
     meta_path = _metadata_path(text_dir)
-    data = _load_metadata(meta_path)
+    data = load_metadata(meta_path)
 
     authors = data.get("authors")
     if authors is None:
@@ -79,4 +65,4 @@ def text_author_remove(*, text_dir: Path, nickname: str) -> None:
         return
 
     data["authors"] = kept
-    _write_metadata(meta_path, data)
+    write_metadata(meta_path, data)
