@@ -47,6 +47,9 @@ case "$COMMAND" in
         echo "🧪 Running pytest..."
         uv run --extra dev python -m pytest
 
+        echo "🧪 Running behave..."
+        uv run --extra dev behave
+
         echo "✅ All checks passed!"
         ;;
 
