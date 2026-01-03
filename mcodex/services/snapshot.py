@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from mcodex.config import get_snapshot_commit_template
+from mcodex.metadata import load_metadata
 
 _STAGES: list[str] = ["draft", "preview", "rc", "final", "published"]
 _STAGE_INDEX: dict[str, int] = {s: i for i, s in enumerate(_STAGES)}
@@ -80,6 +84,87 @@ def _write_snapshot_info(snapshot_dir: Path, data: dict[str, Any]) -> None:
     )
 
 
+def _git_run(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return completed
+
+
+def _git_repo_root(text_dir: Path) -> Path:
+    completed = subprocess.run(
+        ["git", "-C", str(text_dir), "rev-parse", "--show-toplevel"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise ValueError(
+            "Git repository not found. Snapshots with Git require running mcodex "
+            "inside a Git repository."
+        )
+    return Path(completed.stdout.strip()).resolve()
+
+
+def _format_commit_message(*, slug: str, label: str, note: str | None) -> str:
+    tpl = get_snapshot_commit_template()
+    clean_note = None
+    if note is not None:
+        n = note.strip().replace("\n", " ").replace("\r", " ")
+        if n:
+            clean_note = n
+
+    if clean_note is None:
+        if "— {note}" in tpl:
+            tpl = tpl.replace(" — {note}", "")
+        return tpl.format(slug=slug, label=label, note="")
+
+    return tpl.format(slug=slug, label=label, note=clean_note)
+
+
+def _git_commit_and_tag(
+    *,
+    text_dir: Path,
+    slug: str,
+    label: str,
+    note: str | None,
+) -> str:
+    repo_root = _git_repo_root(text_dir)
+    rel = text_dir.resolve().relative_to(repo_root)
+
+    add_res = _git_run(repo_root, ["add", str(rel)])
+    if add_res.returncode != 0:
+        raise ValueError(f"Git add failed: {add_res.stderr.strip()}")
+
+    msg = _format_commit_message(slug=slug, label=label, note=note)
+    commit_res = _git_run(repo_root, ["commit", "-m", msg])
+    if commit_res.returncode != 0:
+        stderr = commit_res.stderr.strip()
+        if "nothing to commit" not in stderr.lower():
+            raise ValueError(f"Git commit failed: {stderr}")
+
+    head_res = _git_run(repo_root, ["rev-parse", "HEAD"])
+    if head_res.returncode != 0:
+        raise ValueError(f"Git rev-parse failed: {head_res.stderr.strip()}")
+    sha = head_res.stdout.strip()
+
+    tag = f"mcodex/{slug}/{label}"
+    tag_check = _git_run(repo_root, ["tag", "-l", tag])
+    if tag_check.returncode != 0:
+        raise ValueError(f"Git tag check failed: {tag_check.stderr.strip()}")
+    if tag_check.stdout.strip():
+        raise ValueError(f"Git tag already exists: {tag}")
+
+    tag_res = _git_run(repo_root, ["tag", tag, sha])
+    if tag_res.returncode != 0:
+        raise ValueError(f"Git tag failed: {tag_res.stderr.strip()}")
+
+    return tag
+
+
 def snapshot_create(*, text_dir: Path, stage: str, note: str | None) -> Path:
     tdir = text_dir.expanduser().resolve()
     if not tdir.exists():
@@ -98,6 +183,9 @@ def snapshot_create(*, text_dir: Path, stage: str, note: str | None) -> Path:
             f"Available stages: {allowed}"
         )
 
+    meta = load_metadata(tdir / "metadata.yaml")
+    slug = str(meta.get("slug") or tdir.name).strip() or tdir.name
+
     n = _next_number(tdir, st)
     label = f"{st}-{n}"
 
@@ -115,13 +203,17 @@ def snapshot_create(*, text_dir: Path, stage: str, note: str | None) -> Path:
         dirs_exist_ok=False,
     )
 
-    info = {
+    info: dict[str, Any] = {
         "label": label,
         "stage": st,
         "number": n,
         "created_at": datetime.now().astimezone().isoformat(),
         "note": (note.strip() if note and note.strip() else None),
     }
+    _write_snapshot_info(snapshot_dir, info)
+
+    tag = _git_commit_and_tag(text_dir=tdir, slug=slug, label=label, note=note)
+    info["git"] = {"tag": tag}
     _write_snapshot_info(snapshot_dir, info)
 
     return snapshot_dir
