@@ -32,7 +32,7 @@ def test_normalize_title_rejects_empty() -> None:
 
 def test_create_text_creates_structure_and_metadata(tmp_path: Path) -> None:
     author_add(
-        nickname="celestian",
+        nickname="Novy",
         first_name="Jan",
         last_name="Novák",
         email="jan.novak@example.com",
@@ -50,7 +50,7 @@ def test_create_text_creates_structure_and_metadata(tmp_path: Path) -> None:
     target = create_text(
         title="Článek o něčem",
         root=root,
-        author_nicknames=["celestian", "eva"],
+        author_nicknames=["Novy", "eva"],
     )
 
     assert target.exists()
@@ -66,7 +66,7 @@ def test_create_text_creates_structure_and_metadata(tmp_path: Path) -> None:
 
     authors = data["authors"]
     assert isinstance(authors, list)
-    assert [a["nickname"] for a in authors] == ["celestian", "eva"]
+    assert [a["nickname"] for a in authors] == ["Novy", "eva"]
     assert authors[0]["first_name"] == "Jan"
     assert authors[1]["first_name"] == "Eva Marie"
 
@@ -85,7 +85,7 @@ def test_create_text_rejects_unknown_author(tmp_path: Path) -> None:
 
 def test_create_text_rejects_existing_target_dir(tmp_path: Path) -> None:
     author_add(
-        nickname="celestian",
+        nickname="Novy",
         first_name="Jan",
         last_name="Novák",
         email="jan.novak@example.com",
@@ -97,7 +97,7 @@ def test_create_text_rejects_existing_target_dir(tmp_path: Path) -> None:
     first = create_text(
         title="Duplicitní",
         root=root,
-        author_nicknames=["celestian"],
+        author_nicknames=["Novy"],
     )
     assert first.exists()
 
@@ -105,5 +105,5 @@ def test_create_text_rejects_existing_target_dir(tmp_path: Path) -> None:
         create_text(
             title="Duplicitní",
             root=root,
-            author_nicknames=["celestian"],
+            author_nicknames=["Novy"],
         )

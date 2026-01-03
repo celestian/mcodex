@@ -6,6 +6,7 @@ from docopt import docopt
 
 from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.create_text import create_text
+from mcodex.services.text_authors import text_author_add, text_author_remove
 
 __version__ = "0.1.0"
 
@@ -17,6 +18,8 @@ Usage:
   mcodex author add <nickname> <first_name> <last_name> <email>
   mcodex author remove <nickname>
   mcodex author list
+  mcodex text author add <text_dir> <nickname>
+  mcodex text author remove <text_dir> <nickname>
   mcodex (-h | --help)
   mcodex --version
 
@@ -58,6 +61,17 @@ def main(argv: list[str] | None = None) -> int:
         root_dir: str = args["--root"]
         nicknames: list[str] = args["--author"]
         create_text(title=title, root=Path(root_dir), author_nicknames=nicknames)
+        return 0
+
+    if args["text"] and args["author"] and args["add"]:
+        text_author_add(text_dir=Path(args["<text_dir>"]), nickname=args["<nickname>"])
+        return 0
+
+    if args["text"] and args["author"] and args["remove"]:
+        text_author_remove(
+            text_dir=Path(args["<text_dir>"]),
+            nickname=args["<nickname>"],
+        )
         return 0
 
     raise AssertionError("Unhandled command arguments.")
