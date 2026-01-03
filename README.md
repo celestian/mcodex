@@ -123,7 +123,7 @@ title: "Článek o něčem"
 slug: "clanek_o_necem"
 created_at: "2026-01-03T14:22:10+01:00"
 authors:
-  - nickname: Novy
+  - nickname: celestian
     first_name: Jan
     last_name: Novák
     email: jan.novak@example.com
@@ -164,11 +164,11 @@ At the current stage, mcodex supports:
 Example workflow:
 
 ```bash
-mcodex author add Novy "Jan" "Novák" jan.novak@example.com
+mcodex author add celestian "Jan" "Novák" jan.novak@example.com
 mcodex author add eva "Eva Marie" "Svobodová" eva@example.com
 
 mcodex create "Článek o něčem" \
-  --author=Novy \
+  --author=celestian \
   --author=eva
 ```
 
