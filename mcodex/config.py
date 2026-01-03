@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import asdict
 from pathlib import Path
 
@@ -9,6 +10,16 @@ from mcodex.models import Author
 
 
 def default_config_path() -> Path:
+    """
+    Return the path to the user configuration file.
+
+    If MCODEX_CONFIG_PATH is set, it is used as an override.
+    Otherwise the default is ~/.config/mcodex/config.yaml.
+    """
+    override = os.environ.get("MCODEX_CONFIG_PATH")
+    if override:
+        return Path(override).expanduser()
+
     base = Path.home() / ".config" / "mcodex"
     return base / "config.yaml"
 
