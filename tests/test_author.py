@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from mcodex.services.author import author_add, author_list
+from mcodex.services.author import author_add, author_list, author_remove
 
 
 @pytest.fixture()
@@ -21,7 +21,7 @@ def patch_config_path(monkeypatch: pytest.MonkeyPatch, config_path: Path) -> Non
 
 def test_author_add_and_list_prints(capsys: pytest.CaptureFixture[str]) -> None:
     author_add(
-        nickname="celestian",
+        nickname="Novy",
         first_name="Jan",
         last_name="Novák",
         email="jan.novak@example.com",
@@ -30,7 +30,7 @@ def test_author_add_and_list_prints(capsys: pytest.CaptureFixture[str]) -> None:
     author_list()
     out = capsys.readouterr().out.strip()
 
-    assert out == "Jan Novák (@celestian) <jan.novak@example.com>"
+    assert out == "Jan Novák (@Novy) <jan.novak@example.com>"
 
 
 def test_author_add_rejects_duplicate_nickname() -> None:
@@ -50,10 +50,10 @@ def test_author_add_rejects_duplicate_nickname() -> None:
         )
 
 
-def test_author_add_rejects_uppercase_nickname() -> None:
-    with pytest.raises(ValueError, match="lowercase"):
+def test_author_add_rejects_invalid_nickname_characters() -> None:
+    with pytest.raises(ValueError, match="Nickname must match"):
         author_add(
-            nickname="Eva",
+            nickname="eva nová",
             first_name="Eva",
             last_name="Svobodová",
             email="eva@example.com",
@@ -68,6 +68,25 @@ def test_author_add_rejects_bad_email() -> None:
             last_name="Mail",
             email="not-an-email",
         )
+
+
+def test_author_remove_makes_list_empty(capsys: pytest.CaptureFixture[str]) -> None:
+    author_add(
+        nickname="Novy",
+        first_name="Jan",
+        last_name="Novák",
+        email="jan.novak@example.com",
+    )
+    author_remove(nickname="Novy")
+
+    author_list()
+    out = capsys.readouterr().out.strip()
+    assert out == "No authors found."
+
+
+def test_author_remove_missing() -> None:
+    with pytest.raises(ValueError, match="not found"):
+        author_remove(nickname="missing")
 
 
 def test_author_list_empty(capsys: pytest.CaptureFixture[str]) -> None:

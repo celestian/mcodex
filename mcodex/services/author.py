@@ -5,17 +5,15 @@ import re
 from mcodex.config import load_authors, save_authors
 from mcodex.models import Author
 
-_NICK_RE = re.compile(r"^[a-z0-9_]+$")
+_NICK_RE = re.compile(r"^[a-zA-Z0-9_]+$")
 
 
 def _validate_nickname(nickname: str) -> str:
     nick = nickname.strip()
     if not nick:
         raise ValueError("Nickname must not be empty.")
-    if nick.lower() != nick:
-        raise ValueError("Nickname must be lowercase.")
     if not _NICK_RE.fullmatch(nick):
-        raise ValueError("Nickname must match: [a-z0-9_]+")
+        raise ValueError("Nickname must match: [a-zA-Z0-9_]+")
     return nick
 
 
@@ -47,6 +45,17 @@ def author_add(*, nickname: str, first_name: str, last_name: str, email: str) ->
         last_name=last,
         email=mail,
     )
+    save_authors(authors)
+
+
+def author_remove(*, nickname: str) -> None:
+    nick = _validate_nickname(nickname)
+    authors = load_authors()
+
+    if nick not in authors:
+        raise ValueError(f"Author nickname not found: {nick}")
+
+    del authors[nick]
     save_authors(authors)
 
 

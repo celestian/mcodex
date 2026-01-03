@@ -4,7 +4,7 @@ from pathlib import Path
 
 from docopt import docopt
 
-from mcodex.services.author import author_add, author_list
+from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.create_text import create_text
 
 __version__ = "0.1.0"
@@ -15,6 +15,7 @@ mcodex
 Usage:
   mcodex create <title> [--root=<dir>] --author=<nickname>...
   mcodex author add <nickname> <first_name> <last_name> <email>
+  mcodex author remove <nickname>
   mcodex author list
   mcodex (-h | --help)
   mcodex --version
@@ -42,6 +43,10 @@ def main(argv: list[str] | None = None) -> int:
             last_name=args["<last_name>"],
             email=args["<email>"],
         )
+        return 0
+
+    if args["author"] and args["remove"]:
+        author_remove(nickname=args["<nickname>"])
         return 0
 
     if args["author"] and args["list"]:
