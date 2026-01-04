@@ -4,7 +4,7 @@ from pathlib import Path
 
 from docopt import docopt
 
-from mcodex.cli_utils import locate_text_dir
+from mcodex.cli_utils import locate_text_dir, locate_text_dir_for_snapshot
 from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.build import build_pdf
 from mcodex.services.create_text import create_text
@@ -27,8 +27,10 @@ Usage:
   mcodex text author add <text_dir> <nickname>
   mcodex text author remove <text_dir> <nickname>
   mcodex build [<slug>] [<version>] [--root=<dir>]
-  mcodex snapshot create <stage> [<text_dir>] [--note=<text>]
-  mcodex snapshot list [<text_dir>]
+  mcodex snapshot <label> [--note=<note>]
+  mcodex snapshot <text> <label> [--note=<note>]
+  mcodex snapshot list
+  mcodex snapshot list <text>
   mcodex status [<text_dir>]
   mcodex (-h | --help)
   mcodex --version
@@ -38,7 +40,7 @@ Options:
                  root for `build`.
                  [default: .]
   --author=<nickname>  Author nickname (repeatable).
-  --note=<text>  Optional note stored with the snapshot.
+  --note=<note>  Optional note stored with the snapshot.
   -h --help      Show this screen.
   --version      Show version.
 
@@ -48,8 +50,10 @@ Build:
   When run inside a text directory, a single positional arg is treated
   as <version>.
 
-Snapshot stages:
-  draft | preview | rc | final | published
+Snapshot:
+  <text> is optional when run inside a text directory.
+  In a mcodex repo, <text> is the logical slug (without the text_ prefix).
+  Outside a repo, <text> must be a path.
 """
 
 
@@ -109,22 +113,18 @@ def main(argv: list[str] | None = None) -> int:
         print(out)
         return 0
 
-    if args["snapshot"] and args["create"]:
-        from mcodex.cli_utils import resolve_text_dir
-
-        text_dir = resolve_text_dir(args["<text_dir>"])
+    if args["snapshot"] and not args["list"]:
+        text_dir = locate_text_dir_for_snapshot(text=args["<text>"])
         snap_dir = snapshot_create(
             text_dir=text_dir,
-            stage=args["<stage>"],
+            label=args["<label>"],
             note=args["--note"],
         )
         print(f"Snapshot created: {snap_dir.name}")
         return 0
 
     if args["snapshot"] and args["list"]:
-        from mcodex.cli_utils import resolve_text_dir
-
-        text_dir = resolve_text_dir(args["<text_dir>"])
+        text_dir = locate_text_dir_for_snapshot(text=args["<text>"])
         snapshot_list(text_dir=text_dir)
         return 0
 

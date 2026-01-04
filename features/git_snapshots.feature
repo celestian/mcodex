@@ -5,7 +5,7 @@ Feature: git snapshots
     When I run "mcodex author add celestian \"Jan\" \"Novák\" jan.novak@example.com"
     And I run "mcodex create \"Text\" --author=celestian"
     And I cd into "text_text"
-    When I run "mcodex snapshot create draft --note \"first\""
+    When I run "mcodex snapshot draft-1 --note \"first\""
     Then git tag "mcodex/text/draft-1" exists
 
   Scenario: Snapshot fails with a friendly message outside git
@@ -14,4 +14,4 @@ Feature: git snapshots
     When I run "mcodex author add celestian \"Jan\" \"Novák\" jan.novak@example.com"
     And I run "mcodex create \"Text\" --author=celestian"
     And I cd into "text_text"
-    Then running "mcodex snapshot create draft" fails with "Git repository not found"
+    Then running "mcodex snapshot draft-1" fails with "Git repository not found"
