@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -14,19 +15,33 @@ from mcodex.metadata import load_metadata
 
 _STAGES: list[str] = ["draft", "preview", "rc", "final", "published"]
 _STAGE_INDEX: dict[str, int] = {s: i for i, s in enumerate(_STAGES)}
-_SNAP_RE = re.compile(r"^(draft|preview|rc|final|published)-(\d+)$")
+
+_SNAP_RE = re.compile(r"^(?P<stage>[a-z]+)-(?P<num>[0-9]+)$")
+
+
+class GitRepoNotFoundError(RuntimeError):
+    pass
+
+
+def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def _git_root_for(path: Path) -> Path:
+    completed = _run_git(["rev-parse", "--show-toplevel"], cwd=path)
+    if completed.returncode != 0:
+        raise GitRepoNotFoundError("Git repository not found")
+    return Path(completed.stdout.strip()).expanduser().resolve()
 
 
 def _snapshot_root(text_dir: Path) -> Path:
-    return text_dir.expanduser().resolve() / ".snapshot"
-
-
-def _validate_stage(stage: str) -> str:
-    s = stage.strip()
-    if s not in _STAGE_INDEX:
-        allowed = ", ".join(_STAGES)
-        raise ValueError(f"Unknown stage: {s}. Allowed: {allowed}")
-    return s
+    return text_dir / ".snapshot"
 
 
 def _list_snapshot_dirs(text_dir: Path) -> list[Path]:
@@ -42,206 +57,13 @@ def _highest_stage_index(text_dir: Path) -> int | None:
         m = _SNAP_RE.match(p.name)
         if not m:
             continue
-        stage = m.group(1)
+        stage = m.group("stage")
+        if stage not in _STAGE_INDEX:
+            continue
         idx = _STAGE_INDEX[stage]
         if highest is None or idx > highest:
             highest = idx
     return highest
-
-
-def _next_number(text_dir: Path, stage: str) -> int:
-    root = _snapshot_root(text_dir)
-    if not root.exists():
-        return 1
-
-    mx = 0
-    prefix = f"{stage}-"
-    for p in root.iterdir():
-        if not p.is_dir():
-            continue
-        name = p.name
-        if not name.startswith(prefix):
-            continue
-        m = _SNAP_RE.match(name)
-        if not m:
-            continue
-        n = int(m.group(2))
-        mx = max(mx, n)
-    return mx + 1
-
-
-def _ignore_for_copy(_: str, names: list[str]) -> set[str]:
-    ignore = {".snapshot", ".git", "__pycache__"}
-    ignore.update({"build", "exports", "documents"})
-    return {n for n in names if n in ignore}
-
-
-def _write_snapshot_info(snapshot_dir: Path, data: dict[str, Any]) -> None:
-    p = snapshot_dir / "snapshot.yaml"
-    p.write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
-
-
-def _git_run(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(
-        ["git", "-C", str(repo_root), *args],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    return completed
-
-
-def _git_repo_root(text_dir: Path) -> Path:
-    completed = subprocess.run(
-        ["git", "-C", str(text_dir), "rev-parse", "--show-toplevel"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise ValueError(
-            "Git repository not found. Snapshots with Git require running mcodex "
-            "inside a Git repository."
-        )
-    return Path(completed.stdout.strip()).resolve()
-
-
-def _format_commit_message(*, slug: str, label: str, note: str | None) -> str:
-    tpl = get_snapshot_commit_template()
-    clean_note = None
-    if note is not None:
-        n = note.strip().replace("\n", " ").replace("\r", " ")
-        if n:
-            clean_note = n
-
-    if clean_note is None:
-        if "— {note}" in tpl:
-            tpl = tpl.replace(" — {note}", "")
-        return tpl.format(slug=slug, label=label, note="")
-
-    return tpl.format(slug=slug, label=label, note=clean_note)
-
-
-def _git_commit_and_tag(
-    *,
-    text_dir: Path,
-    slug: str,
-    label: str,
-    note: str | None,
-) -> str:
-    repo_root = _git_repo_root(text_dir)
-    rel = text_dir.resolve().relative_to(repo_root)
-
-    add_res = _git_run(repo_root, ["add", str(rel)])
-    if add_res.returncode != 0:
-        raise ValueError(f"Git add failed: {add_res.stderr.strip()}")
-
-    msg = _format_commit_message(slug=slug, label=label, note=note)
-    commit_res = _git_run(repo_root, ["commit", "-m", msg])
-    if commit_res.returncode != 0:
-        stderr = commit_res.stderr.strip()
-        if "nothing to commit" not in stderr.lower():
-            raise ValueError(f"Git commit failed: {stderr}")
-
-    head_res = _git_run(repo_root, ["rev-parse", "HEAD"])
-    if head_res.returncode != 0:
-        raise ValueError(f"Git rev-parse failed: {head_res.stderr.strip()}")
-    sha = head_res.stdout.strip()
-
-    tag = f"mcodex/{slug}/{label}"
-    tag_check = _git_run(repo_root, ["tag", "-l", tag])
-    if tag_check.returncode != 0:
-        raise ValueError(f"Git tag check failed: {tag_check.stderr.strip()}")
-    if tag_check.stdout.strip():
-        raise ValueError(f"Git tag already exists: {tag}")
-
-    tag_res = _git_run(repo_root, ["tag", tag, sha])
-    if tag_res.returncode != 0:
-        raise ValueError(f"Git tag failed: {tag_res.stderr.strip()}")
-
-    return tag
-
-
-def snapshot_create(*, text_dir: Path, stage: str, note: str | None) -> Path:
-    tdir = text_dir.expanduser().resolve()
-    if not tdir.exists():
-        raise FileNotFoundError(f"Text directory does not exist: {tdir}")
-    if not tdir.is_dir():
-        raise NotADirectoryError(f"Text path is not a directory: {tdir}")
-
-    st = _validate_stage(stage)
-    highest = _highest_stage_index(tdir)
-    target_idx = _STAGE_INDEX[st]
-
-    if highest is not None and target_idx < highest:
-        allowed = ", ".join(_STAGES[highest:])
-        raise ValueError(
-            f"Stage '{st}' is no longer allowed for this text. "
-            f"Available stages: {allowed}"
-        )
-
-    meta = load_metadata(tdir / "metadata.yaml")
-    slug = str(meta.get("slug") or tdir.name).strip() or tdir.name
-
-    n = _next_number(tdir, st)
-    label = f"{st}-{n}"
-
-    root = _snapshot_root(tdir)
-    root.mkdir(parents=True, exist_ok=True)
-
-    snapshot_dir = root / label
-    if snapshot_dir.exists():
-        raise FileExistsError(f"Snapshot already exists: {snapshot_dir}")
-
-    shutil.copytree(
-        tdir,
-        snapshot_dir,
-        ignore=_ignore_for_copy,
-        dirs_exist_ok=False,
-    )
-
-    info: dict[str, Any] = {
-        "label": label,
-        "stage": st,
-        "number": n,
-        "created_at": datetime.now().astimezone().isoformat(),
-        "note": (note.strip() if note and note.strip() else None),
-    }
-    _write_snapshot_info(snapshot_dir, info)
-
-    tag = _git_commit_and_tag(text_dir=tdir, slug=slug, label=label, note=note)
-    info["git"] = {"tag": tag}
-    _write_snapshot_info(snapshot_dir, info)
-
-    return snapshot_dir
-
-
-def snapshot_list(*, text_dir: Path) -> None:
-    tdir = text_dir.expanduser().resolve()
-    root = _snapshot_root(tdir)
-    if not root.exists():
-        print("No snapshots found.")
-        return
-
-    def _sort_key(p: Path) -> tuple[int, str]:
-        m = _SNAP_RE.match(p.name)
-        assert m is not None
-        stage = m.group(1)
-        return _STAGE_INDEX[stage], p.name
-
-    snaps = sorted(
-        (p for p in root.iterdir() if p.is_dir() and _SNAP_RE.match(p.name)),
-        key=_sort_key,
-    )
-    if not snaps:
-        print("No snapshots found.")
-        return
-
-    for p in snaps:
-        print(p.name)
 
 
 def available_stages(*, text_dir: Path) -> list[str]:
@@ -258,3 +80,159 @@ def current_stage(*, text_dir: Path) -> str | None:
     if highest is None:
         return None
     return _STAGES[highest]
+
+
+def _next_number_for_stage(text_dir: Path, stage: str) -> int:
+    nums: list[int] = []
+    for p in _list_snapshot_dirs(text_dir):
+        m = _SNAP_RE.match(p.name)
+        if not m:
+            continue
+        if m.group("stage") != stage:
+            continue
+        nums.append(int(m.group("num")))
+    return (max(nums) + 1) if nums else 1
+
+
+def _copy_text_dir(
+    *,
+    src: Path,
+    dst: Path,
+    ignore_names: Iterable[str],
+) -> None:
+    ignored = set(ignore_names)
+
+    def _ignore(_: str, names: list[str]) -> set[str]:
+        return {n for n in names if n in ignored}
+
+    shutil.copytree(src, dst, ignore=_ignore, dirs_exist_ok=False)
+
+
+def _write_snapshot_yaml(
+    *,
+    path: Path,
+    label: str,
+    stage: str,
+    note: str | None,
+    git_tag: str,
+) -> None:
+    payload: dict[str, Any] = {
+        "label": label,
+        "stage": stage,
+        "created_at": datetime.now().astimezone().isoformat(),
+        "git": {
+            "tag": git_tag,
+        },
+    }
+    if note:
+        payload["note"] = note
+    path.write_text(
+        yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+
+def _format_commit_message(
+    *,
+    repo_root: Path,
+    slug: str,
+    label: str,
+    note: str | None,
+) -> str:
+    tpl = get_snapshot_commit_template(repo_root=repo_root)
+    safe_note = note or ""
+    return tpl.format(slug=slug, label=label, note=safe_note).strip()
+
+
+def _extract_metadata_dict(result: Any) -> dict[str, Any]:
+    if isinstance(result, dict):
+        return result
+
+    if isinstance(result, (tuple, list)) and result:
+        head = result[0]
+        if isinstance(head, dict):
+            return head
+
+    return {}
+
+
+def snapshot_create(*, text_dir: Path, stage: str, note: str | None) -> Path:
+    tdir = text_dir.expanduser().resolve()
+    if stage not in _STAGES:
+        allowed = ", ".join(_STAGES)
+        raise ValueError(f"Invalid stage: {stage}. Allowed: {allowed}")
+
+    repo_root = _git_root_for(tdir)
+
+    highest = _highest_stage_index(tdir)
+    if highest is not None and _STAGE_INDEX[stage] < highest:
+        current = _STAGES[highest]
+        raise ValueError(f"Stage '{stage}' is no longer allowed after '{current}'.")
+
+    meta_path = tdir / "metadata.yaml"
+    meta = _extract_metadata_dict(load_metadata(meta_path))
+    slug = str(meta.get("slug") or tdir.name)
+
+    num = _next_number_for_stage(tdir, stage)
+    label = f"{stage}-{num}"
+
+    root = _snapshot_root(tdir)
+    root.mkdir(parents=True, exist_ok=True)
+
+    snap_dir = root / label
+    if snap_dir.exists():
+        raise FileExistsError(f"Snapshot already exists: {snap_dir}")
+
+    tag = f"mcodex/{slug}/{label}"
+
+    # Copy the whole text directory into the snapshot directory.
+    # Ignore snapshot root itself to avoid recursion.
+    _copy_text_dir(src=tdir, dst=snap_dir, ignore_names=[root.name, ".git"])
+
+    _write_snapshot_yaml(
+        path=snap_dir / "snapshot.yaml",
+        label=label,
+        stage=stage,
+        note=note,
+        git_tag=tag,
+    )
+
+    # Git commit + tag.
+    rel_snap_dir = snap_dir.relative_to(repo_root)
+
+    add_cp = _run_git(["add", str(rel_snap_dir)], cwd=repo_root)
+    if add_cp.returncode != 0:
+        raise RuntimeError(
+            f"Git add failed:\nout: {add_cp.stdout}\nerr: {add_cp.stderr}\n"
+        )
+
+    msg = _format_commit_message(
+        repo_root=repo_root,
+        slug=slug,
+        label=label,
+        note=note,
+    )
+
+    commit_cp = _run_git(["commit", "-m", msg], cwd=repo_root)
+    if commit_cp.returncode != 0:
+        raise RuntimeError(
+            f"Git commit failed:\nout: {commit_cp.stdout}\nerr: {commit_cp.stderr}\n"
+        )
+
+    tag_cp = _run_git(["tag", tag], cwd=repo_root)
+    if tag_cp.returncode != 0:
+        raise RuntimeError(
+            f"Git tag failed:\nout: {tag_cp.stdout}\nerr: {tag_cp.stderr}\n"
+        )
+
+    return snap_dir
+
+
+def snapshot_list(*, text_dir: Path) -> None:
+    tdir = text_dir.expanduser().resolve()
+    items = sorted(_list_snapshot_dirs(tdir), key=lambda p: p.name)
+    if not items:
+        print("No snapshots found.")
+        return
+    for p in items:
+        print(p.name)

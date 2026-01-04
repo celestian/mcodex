@@ -7,16 +7,12 @@ import pytest
 from mcodex.services.author import author_add, author_list, author_remove
 
 
-@pytest.fixture()
-def config_path(tmp_path: Path) -> Path:
-    return tmp_path / "config.yaml"
-
-
 @pytest.fixture(autouse=True)
-def patch_config_path(monkeypatch: pytest.MonkeyPatch, config_path: Path) -> None:
-    from mcodex import config as config_module
-
-    monkeypatch.setattr(config_module, "default_config_path", lambda: config_path)
+def in_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / ".mcodex").mkdir(parents=True)
+    (repo / ".mcodex" / "config.yaml").write_text("{}\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
 
 
 def test_author_add_and_list_prints(capsys: pytest.CaptureFixture[str]) -> None:

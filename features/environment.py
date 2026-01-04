@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -33,14 +32,6 @@ def before_scenario(context, scenario) -> None:
     context.workdir = Path(tempfile.mkdtemp(prefix="mcodex_behave_"))
     ensure_test_root_marker(context.workdir)
 
-    context.cfg_path = context.workdir / "config.yaml"
-    os.environ["MCODEX_CONFIG_PATH"] = str(context.cfg_path)
-
-    os.environ["GIT_AUTHOR_NAME"] = "Behave"
-    os.environ["GIT_AUTHOR_EMAIL"] = "behave@example.invalid"
-    os.environ["GIT_COMMITTER_NAME"] = "Behave"
-    os.environ["GIT_COMMITTER_EMAIL"] = "behave@example.invalid"
-
     try:
         _git("init", "-b", "main", cwd=context.workdir)
     except subprocess.CalledProcessError:
@@ -56,12 +47,6 @@ def before_scenario(context, scenario) -> None:
 
 
 def after_scenario(context, scenario) -> None:
-    os.environ.pop("MCODEX_CONFIG_PATH", None)
-    os.environ.pop("GIT_AUTHOR_NAME", None)
-    os.environ.pop("GIT_AUTHOR_EMAIL", None)
-    os.environ.pop("GIT_COMMITTER_NAME", None)
-    os.environ.pop("GIT_COMMITTER_EMAIL", None)
-
     workdir = getattr(context, "workdir", None)
     if workdir is None:
         return

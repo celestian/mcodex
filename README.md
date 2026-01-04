@@ -3,7 +3,10 @@
 **mcodex** is an opinionated CLI tool for managing *prose writing projects*.
 
 It does **not** help you write text.  
-It helps you manage **versions, snapshots, exports, and editorial states** around writing — in a way that is explicit, reproducible, and Git-based.
+It helps you manage **versions, snapshots, metadata, and editorial states**
+around writing — in a way that is explicit, reproducible, and Git-based.
+
+---
 
 ## What mcodex is for
 
@@ -12,13 +15,15 @@ mcodex answers questions like:
 - Which versions of this text exist?
 - In which state was the text when I sent it out?
 - Can I reproduce *exactly* the document I sent months ago?
-- How do I keep drafts, snapshots, and exports organized without friction?
+- Which snapshot corresponds to which Git tag?
 
 mcodex is designed for authors who:
 
 - write in Markdown,
 - are comfortable with Git,
 - prefer transparent, scriptable workflows over GUI-heavy writing apps.
+
+---
 
 ## What mcodex is *not*
 
@@ -34,86 +39,130 @@ mcodex deliberately does **not** try to be:
 Writing happens elsewhere.  
 mcodex manages what *surrounds* writing.
 
+---
+
 ## Core principles
 
 ### 1. Text-first, Markdown-only sources
 
-All authoritative sources are plain text (Markdown + TOML/YAML metadata).
+All authoritative sources are plain text:
+
+- `text.md`
+- `metadata.yaml`
+- snapshot copies
 
 No proprietary formats are ever treated as sources of truth.
 
-### 2. Snapshots are explicit
+---
+
+### 2. Snapshots are explicit and named
 
 A snapshot is a **deliberate, named state** of a text.
 
-- It is created intentionally.
-- It has a human-readable label (`draft-2`, `beta-1`, `final`, …).
-- It is recorded as part of the project history.
-- It is frozen via Git (commit + tag).
+- created intentionally
+- stored as a directory copy
+- labeled (`draft-1`, `rc-2`, `final-1`, …)
+- frozen in Git (commit + tag)
+- recorded with metadata
 
-Snapshots are **not** just commits you happen to make.
+Snapshots are **not** accidental commits.
+
+---
 
 ### 3. Reproducibility over convenience
 
 If a document was sent out, it must be possible to reproduce it exactly:
 
 - same content
-- same structure
 - same metadata
-- same author identity
-- same point in time
+- same authorship
+- same snapshot label
+- same Git tag
 
-Dynamic values are avoided; frozen metadata is preferred.
+Hidden state is avoided.
+Everything relevant lives in the repository.
+
+---
 
 ### 4. Git is infrastructure, not UI
 
 mcodex requires Git, but:
 
-- does not enforce a specific Git workflow,
-- does not hide Git operations,
-- does not replace Git concepts with abstractions.
+- does not replace Git concepts
+- does not invent a parallel history model
+- does not hide Git operations
 
-Git is used as a reliable storage and history mechanism — not as the primary interface.
+Git is storage and history — not the user interface.
+
+---
 
 ### 5. Editorial reality over software abstraction
 
 mcodex adapts to how authors and editors actually work:
 
 - PDFs with annotations
-- DOCX / ODT files with comments
+- DOCX files with comments
+- email attachments
+- manual review cycles
 
 mcodex records outcomes.  
 It does not attempt to automate human judgment.
 
+---
+
 ## Conceptual model
+
+### Repository
+
+A mcodex project is a **Git repository** initialized with:
+
+```bash
+mcodex init
+```
+
+This creates:
+
+```text
+.mcodex/
+├── config.yaml
+└── templates/
+```
+
+`.mcodex/config.yaml` is the **single source of configuration truth**.
+
+There is **no global `~/.config`**.
+
+---
 
 ### Text
 
 A **text** is represented by a directory.
 
-At minimum, a text directory contains:
+Minimal structure:
 
 ```text
 <text-slug>/
 ├── text.md
 ├── metadata.yaml
-└── stages/
+└── .snapshot/
 ```
 
 - `text.md`  
-  The authoritative Markdown source of the text.
+  Authoritative Markdown source.
 
 - `metadata.yaml`  
-  Frozen metadata describing the text (title, authors, creation time).
+  Frozen metadata (title, slug, authors, creation time).
 
-- `stages/`  
-  Reserved for editorial states, snapshots, and future exports.
+- `.snapshot/`  
+  Versioned snapshot directories.
 
-The directory name (`<text-slug>`) is derived from the text title and is stable.
+The directory name (`<text-slug>`) is stable and derived from the title.
+
+---
 
 ### Metadata
 
-Each text has explicit metadata stored in `metadata.yaml`.
+Each text carries its own authoritative metadata.
 
 Example:
 
@@ -129,47 +178,56 @@ authors:
     email: jan.novak@example.com
 ```
 
-Metadata is **authoritative and self-contained**.
+Metadata is **self-contained**.
 
-Even if global configuration is lost, a text directory still carries all
-information needed to identify authorship and origin.
+Even if configuration is lost, a text directory still carries everything
+needed to identify authorship and origin.
+
+---
 
 ### Author identity
 
-Authors are managed explicitly and identified by a stable **nickname**.
+Authors are identified by a stable **nickname**.
 
 An author consists of:
 
-- `nickname` (stable handle, used in CLI)
+- `nickname`
 - `first_name`
 - `last_name`
 - `email`
 
-Authors are stored globally for convenience, but **copied into text metadata**
-when a text is created.
+Authors are stored in `.mcodex/config.yaml` for convenience,  
+but **copied into `metadata.yaml`** when a text is created.
 
-This guarantees reproducibility and independence from user configuration.
+This guarantees reproducibility.
+
+---
 
 ## Current capabilities
 
 At the current stage, mcodex supports:
 
-- registering authors
-- listing known authors
-- creating new text directories
-- attaching one or more authors to a text at creation time
-- generating stable metadata
-- enforcing reproducible structure
+- initializing a repository (`mcodex init`)
+- registering authors (repo-scoped)
+- creating new texts
+- attaching authors to texts
+- creating labeled snapshots
+- freezing snapshots via Git commit + tag
 
 Example workflow:
 
 ```bash
+mcodex init
+
 mcodex author add celestian "Jan" "Novák" jan.novak@example.com
 mcodex author add eva "Eva Marie" "Svobodová" eva@example.com
 
 mcodex create "Článek o něčem" \
   --author=celestian \
   --author=eva
+
+cd clanek_o_necem
+mcodex snapshot create draft --note "first draft sent to editor"
 ```
 
 Result:
@@ -178,43 +236,26 @@ Result:
 clanek_o_necem/
 ├── text.md
 ├── metadata.yaml
-└── stages/
+└── .snapshot/
+    └── draft-1/
+        ├── text.md
+        ├── metadata.yaml
+        └── snapshot.yaml
 ```
 
-## Configuration
-
-mcodex stores user-level configuration in:
+Git tag:
 
 ```text
-~/.config/mcodex/config.yaml
+mcodex/clanek_o_necem/draft-1
 ```
 
-This configuration currently contains:
+---
 
-- the registry of known authors
+## Installation (development)
 
-Configuration is treated as **cache and convenience**, not as a source of truth.
-Texts remain valid even if the configuration file is removed.
+mcodex is a Python CLI tool.
 
-## Installation
-
-mcodex is a Python CLI tool and is designed to be used with **uv**.
-
-### Install uv
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Restart your shell, then verify:
-
-```bash
-uv --version
-```
-
-### Install mcodex (editable)
-
-From the project root:
+### Using uv (recommended for development)
 
 ```bash
 uv venv
@@ -228,18 +269,21 @@ Verify:
 mcodex --help
 ```
 
+---
+
 ## Project status
 
-mcodex is currently in an **early, opinionated stage**.
+mcodex is in an **early but stabilized architectural phase**.
 
-The focus is on:
+Current priorities:
 
 - correctness
-- explicitness
+- explicit filesystem state
 - reproducibility
-- testability
+- test isolation and safety
 
 Features will be added incrementally, with a strong preference for:
+
 - simple CLI commands
 - transparent file formats
 - minimal hidden state

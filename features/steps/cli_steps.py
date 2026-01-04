@@ -14,9 +14,10 @@ def _normalize_command(command: str) -> str:
 
 @given("an empty mcodex config")
 def step_empty_config(context) -> None:
-    context.cfg_path.parent.mkdir(parents=True, exist_ok=True)
-    if context.cfg_path.exists():
-        context.cfg_path.unlink()
+    cfg_dir = Path(context.workdir) / ".mcodex"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = cfg_dir / "config.yaml"
+    cfg_path.write_text("{}\n", encoding="utf-8")
 
 
 @when('I run "{command}"')
@@ -47,6 +48,26 @@ def step_run_command(context, command: str) -> None:
 def step_text_dir_exists(context, slug: str) -> None:
     p = Path(context.workdir) / slug
     assert p.exists() and p.is_dir(), f"Missing directory: {p}"
+
+
+@then('a file "{relpath}" exists')
+def step_file_exists(context, relpath: str) -> None:
+    p = Path(context.workdir) / relpath
+    assert p.exists() and p.is_file(), f"Missing file: {p}"
+
+
+@then('a directory "{relpath}" exists')
+def step_dir_exists(context, relpath: str) -> None:
+    p = Path(context.workdir) / relpath
+    assert p.exists() and p.is_dir(), f"Missing directory: {p}"
+
+
+@then('the file "{relpath}" contains "{text}"')
+def step_file_contains(context, relpath: str, text: str) -> None:
+    p = Path(context.workdir) / relpath
+    assert p.exists() and p.is_file(), f"Missing file: {p}"
+    data = p.read_text(encoding="utf-8")
+    assert text in data, data
 
 
 def _load_metadata(context, slug: str) -> dict:

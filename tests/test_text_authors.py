@@ -9,19 +9,16 @@ from mcodex.services.author import author_add
 from mcodex.services.text_authors import text_author_add, text_author_remove
 
 
-@pytest.fixture()
-def config_path(tmp_path: Path) -> Path:
-    return tmp_path / "config.yaml"
-
-
 @pytest.fixture(autouse=True)
-def patch_config_path(monkeypatch: pytest.MonkeyPatch, config_path: Path) -> None:
-    from mcodex import config as config_module
+def in_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    (repo / ".mcodex").mkdir(parents=True)
+    (repo / ".mcodex" / "config.yaml").write_text("{}\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    return repo
 
-    monkeypatch.setattr(config_module, "default_config_path", lambda: config_path)
 
-
-def test_text_author_add_and_remove_upgrades_metadata(tmp_path: Path) -> None:
+def test_text_author_add_and_remove_upgrades_metadata(in_repo: Path) -> None:
     author_add(
         nickname="Novy",
         first_name="Jan",
@@ -29,10 +26,9 @@ def test_text_author_add_and_remove_upgrades_metadata(tmp_path: Path) -> None:
         email="jan.novak@example.com",
     )
 
-    text_dir = tmp_path / "text1"
+    text_dir = in_repo / "text1"
     text_dir.mkdir()
 
-    # Intentionally omit metadata_version (v0) to test upgrade on load.
     (text_dir / "metadata.yaml").write_text(
         yaml.safe_dump(
             {
@@ -61,8 +57,8 @@ def test_text_author_add_and_remove_upgrades_metadata(tmp_path: Path) -> None:
     assert data2["authors"] == []
 
 
-def test_text_author_add_unknown_author(tmp_path: Path) -> None:
-    text_dir = tmp_path / "text1"
+def test_text_author_add_unknown_author(in_repo: Path) -> None:
+    text_dir = in_repo / "text1"
     text_dir.mkdir()
     (text_dir / "metadata.yaml").write_text(
         yaml.safe_dump(
