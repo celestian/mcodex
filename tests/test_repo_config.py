@@ -67,3 +67,45 @@ def test_get_text_prefix_reads_config(tmp_path: Path) -> None:
     from mcodex.config import get_text_prefix
 
     assert get_text_prefix(repo_root=repo) == "article_"
+
+
+def test_get_artifacts_dir_defaults_to_artifacts(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    cfg_dir = repo / ".mcodex"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text("{}\n", encoding="utf-8")
+
+    from mcodex.config import get_artifacts_dir
+
+    assert get_artifacts_dir(repo_root=repo) == "artifacts"
+
+
+def test_get_artifacts_dir_reads_config(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    cfg_dir = repo / ".mcodex"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text(
+        "artifacts_dir: out\n",
+        encoding="utf-8",
+    )
+
+    from mcodex.config import get_artifacts_dir
+
+    assert get_artifacts_dir(repo_root=repo) == "out"
+
+
+def test_resolve_artifacts_path_uses_repo_root(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    cfg_dir = repo / ".mcodex"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text(
+        "artifacts_dir: dist\n",
+        encoding="utf-8",
+    )
+
+    nested = repo / "a" / "b"
+    nested.mkdir(parents=True)
+
+    from mcodex.config import resolve_artifacts_path
+
+    assert resolve_artifacts_path(start=nested) == repo / "dist"
