@@ -95,6 +95,23 @@ def _next_number_for_stage(text_dir: Path, stage: str) -> int:
     return (max(nums) + 1) if nums else 1
 
 
+def normalize_snapshot_label(*, text_dir: Path, label_or_stage: str) -> str:
+    """Normalize user input into a concrete snapshot label.
+
+    - If input is a known stage (e.g. "draft"), create the next numbered label
+      (e.g. "draft-3").
+    - Otherwise, treat it as an explicit label (e.g. "draft-7", "sent-to-editor").
+    """
+    tdir = text_dir.expanduser().resolve()
+    raw = str(label_or_stage).strip()
+
+    if raw in _STAGES:
+        n = _next_number_for_stage(tdir, raw)
+        return f"{raw}-{n}"
+
+    return raw
+
+
 def _copy_text_dir(
     *,
     src: Path,
@@ -159,7 +176,8 @@ def _extract_metadata_dict(result: Any) -> dict[str, Any]:
 
 def snapshot_create(*, text_dir: Path, label: str, note: str | None) -> Path:
     tdir = text_dir.expanduser().resolve()
-    safe_label = str(label).strip()
+
+    safe_label = normalize_snapshot_label(text_dir=tdir, label_or_stage=label)
     if not safe_label:
         raise ValueError("Snapshot label must not be empty.")
     if not _LABEL_RE.match(safe_label):

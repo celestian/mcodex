@@ -24,3 +24,13 @@ Feature: snapshots
     And I run "mcodex create \"Text\" --author=celestian"
     And I cd into "text_text"
     Then running "mcodex snapshot bad/label" fails with "Invalid snapshot label"
+
+  Scenario: Snapshot can be created using stage only and auto-numbers
+    Given an empty mcodex config
+    When I run "mcodex author add celestian \"Jan\" \"Novák\" jan.novak@example.com"
+    And I run "mcodex create \"Text\" --author=celestian"
+    And I cd into "text_text"
+    When I run "mcodex snapshot draft"
+    Then snapshot "draft-1" exists
+    When I run "mcodex snapshot draft"
+    Then snapshot "draft-2" exists
