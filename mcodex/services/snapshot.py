@@ -17,6 +17,7 @@ _STAGES: list[str] = ["draft", "preview", "rc", "final", "published"]
 _STAGE_INDEX: dict[str, int] = {s: i for i, s in enumerate(_STAGES)}
 
 _SNAP_RE = re.compile(r"^(?P<stage>[a-z]+)-(?P<num>[0-9]+)$")
+_LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 class GitRepoNotFoundError(RuntimeError):
@@ -48,7 +49,7 @@ def _list_snapshot_dirs(text_dir: Path) -> list[Path]:
     root = _snapshot_root(text_dir)
     if not root.exists():
         return []
-    return [p for p in root.iterdir() if p.is_dir() and _SNAP_RE.match(p.name)]
+    return [p for p in root.iterdir() if p.is_dir() and p.name != ".gitkeep"]
 
 
 def _highest_stage_index(text_dir: Path) -> int | None:
@@ -112,14 +113,14 @@ def _write_snapshot_yaml(
     *,
     path: Path,
     label: str,
-    stage: str,
     note: str | None,
     git_tag: str,
+    text_slug: str,
 ) -> None:
     payload: dict[str, Any] = {
         "label": label,
-        "stage": stage,
         "created_at": datetime.now().astimezone().isoformat(),
+        "text": {"slug": text_slug},
         "git": {
             "tag": git_tag,
         },
@@ -156,34 +157,31 @@ def _extract_metadata_dict(result: Any) -> dict[str, Any]:
     return {}
 
 
-def snapshot_create(*, text_dir: Path, stage: str, note: str | None) -> Path:
+def snapshot_create(*, text_dir: Path, label: str, note: str | None) -> Path:
     tdir = text_dir.expanduser().resolve()
-    if stage not in _STAGES:
-        allowed = ", ".join(_STAGES)
-        raise ValueError(f"Invalid stage: {stage}. Allowed: {allowed}")
+    safe_label = str(label).strip()
+    if not safe_label:
+        raise ValueError("Snapshot label must not be empty.")
+    if not _LABEL_RE.match(safe_label):
+        raise ValueError(
+            "Invalid snapshot label. Allowed: letters, digits, '.', '_', '-' "
+            "(must start with letter or digit)."
+        )
 
     repo_root = _git_root_for(tdir)
-
-    highest = _highest_stage_index(tdir)
-    if highest is not None and _STAGE_INDEX[stage] < highest:
-        current = _STAGES[highest]
-        raise ValueError(f"Stage '{stage}' is no longer allowed after '{current}'.")
 
     meta_path = tdir / "metadata.yaml"
     meta = _extract_metadata_dict(load_metadata(meta_path))
     slug = str(meta.get("slug") or tdir.name)
 
-    num = _next_number_for_stage(tdir, stage)
-    label = f"{stage}-{num}"
-
     root = _snapshot_root(tdir)
     root.mkdir(parents=True, exist_ok=True)
 
-    snap_dir = root / label
+    snap_dir = root / safe_label
     if snap_dir.exists():
         raise FileExistsError(f"Snapshot already exists: {snap_dir}")
 
-    tag = f"mcodex/{slug}/{label}"
+    tag = f"mcodex/{slug}/{safe_label}"
 
     # Copy the whole text directory into the snapshot directory.
     # Ignore snapshot root itself to avoid recursion.
@@ -191,10 +189,10 @@ def snapshot_create(*, text_dir: Path, stage: str, note: str | None) -> Path:
 
     _write_snapshot_yaml(
         path=snap_dir / "snapshot.yaml",
-        label=label,
-        stage=stage,
+        label=safe_label,
         note=note,
         git_tag=tag,
+        text_slug=slug,
     )
 
     # Git commit + tag.
@@ -209,7 +207,7 @@ def snapshot_create(*, text_dir: Path, stage: str, note: str | None) -> Path:
     msg = _format_commit_message(
         repo_root=repo_root,
         slug=slug,
-        label=label,
+        label=safe_label,
         note=note,
     )
 

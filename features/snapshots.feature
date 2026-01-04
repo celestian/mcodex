@@ -5,7 +5,7 @@ Feature: snapshots
     When I run "mcodex author add celestian \"Jan\" \"Novák\" jan.novak@example.com"
     And I run "mcodex create \"Článek o něčem\" --author=celestian"
     And I cd into "text_clanek_o_necem"
-    When I run "mcodex snapshot create draft --note \"first\""
+    When I run "mcodex snapshot draft-1 --note \"first\""
     Then snapshot "draft-1" exists
     And status shows current stage "draft"
 
@@ -14,14 +14,13 @@ Feature: snapshots
     When I run "mcodex author add celestian \"Jan\" \"Novák\" jan.novak@example.com"
     And I run "mcodex create \"Text\" --author=celestian"
     And I cd into "text_text"
-    When I run "mcodex snapshot create draft"
-    And I run "mcodex snapshot create draft"
+    When I run "mcodex snapshot draft-1"
+    And I run "mcodex snapshot draft-2"
     Then snapshot "draft-2" exists
 
-  Scenario: Going backwards in stages is rejected
+  Scenario: Snapshot label validation rejects invalid labels
     Given an empty mcodex config
     When I run "mcodex author add celestian \"Jan\" \"Novák\" jan.novak@example.com"
     And I run "mcodex create \"Text\" --author=celestian"
     And I cd into "text_text"
-    When I run "mcodex snapshot create rc"
-    Then running "mcodex snapshot create draft" fails with "no longer allowed"
+    Then running "mcodex snapshot bad/label" fails with "Invalid snapshot label"

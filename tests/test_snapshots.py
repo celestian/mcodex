@@ -3,7 +3,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
 import yaml
 
 from mcodex.services.snapshot import snapshot_create
@@ -49,13 +48,14 @@ def test_snapshot_create_commits_and_tags(tmp_path: Path) -> None:
     tdir = repo / "text"
     _write_min_text_dir(tdir)
 
-    snap = snapshot_create(text_dir=tdir, stage="draft", note="first")
+    snap = snapshot_create(text_dir=tdir, label="draft-1", note="first")
 
     assert snap.exists()
     assert (snap / "snapshot.yaml").exists()
 
     data = yaml.safe_load((snap / "snapshot.yaml").read_text(encoding="utf-8"))
     assert data["label"] == "draft-1"
+    assert data["text"]["slug"] == "t"
     assert data["git"]["tag"] == "mcodex/t/draft-1"
 
     tag_list = subprocess.run(
@@ -67,7 +67,7 @@ def test_snapshot_create_commits_and_tags(tmp_path: Path) -> None:
     assert tag_list.stdout.strip() == "mcodex/t/draft-1"
 
 
-def test_snapshot_disallows_going_backwards(tmp_path: Path) -> None:
+def test_snapshot_does_not_copy_snapshot_dir_or_git_dir(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git_init(repo)
@@ -75,7 +75,13 @@ def test_snapshot_disallows_going_backwards(tmp_path: Path) -> None:
     tdir = repo / "text"
     _write_min_text_dir(tdir)
 
-    snapshot_create(text_dir=tdir, stage="rc", note=None)
+    (tdir / ".snapshot").mkdir(parents=True, exist_ok=True)
+    (tdir / ".snapshot" / "junk.txt").write_text("no", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="no longer allowed"):
-        snapshot_create(text_dir=tdir, stage="draft", note=None)
+    (tdir / ".git").mkdir(parents=True, exist_ok=True)
+    (tdir / ".git" / "config").write_text("no", encoding="utf-8")
+
+    snap = snapshot_create(text_dir=tdir, label="draft-2", note=None)
+
+    assert not (snap / ".snapshot").exists()
+    assert not (snap / ".git").exists()
