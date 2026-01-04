@@ -66,7 +66,7 @@ def test_build_pdf_worktree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
     assert out.exists()
     assert out.name == "story_worktree.pdf"
-    assert out.parent.name == "documents"
+    assert out.parent.name == "artifacts"
     assert out.parent.parent == tmp_path
 
 
@@ -115,5 +115,5 @@ def test_build_pdf_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
     assert out.exists()
     assert out.name == "story_draft-1.pdf"
-    assert out.parent.name == "documents"
+    assert out.parent.name == "artifacts"
     assert out.parent.parent == tmp_path

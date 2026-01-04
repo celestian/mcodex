@@ -6,6 +6,12 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from mcodex.config import (
+    DEFAULT_ARTIFACTS_DIR,
+    RepoConfigNotFoundError,
+    find_repo_root,
+    get_artifacts_dir,
+)
 from mcodex.metadata import load_metadata
 
 
@@ -39,8 +45,7 @@ def build_pdf(*, text_dir: Path, version: str) -> Path:
     source = _resolve_source(text_dir=text_dir, version=version)
     slug = _load_slug(source.source_dir)
 
-    root = text_dir.parent
-    out_dir = root / "documents"
+    out_dir = _resolve_artifacts_dir(text_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     out_name = f"{slug}_{source.version_label}.pdf"
@@ -51,6 +56,22 @@ def build_pdf(*, text_dir: Path, version: str) -> Path:
         output_path=out_path,
     )
     return out_path
+
+
+def _resolve_artifacts_dir(text_dir: Path) -> Path:
+    """Resolve the directory for build outputs.
+
+    In a mcodex repo, outputs go to <repo_root>/<artifacts_dir>.
+    Outside a repo, outputs go to <text_dir.parent>/artifacts.
+    """
+
+    try:
+        repo_root = find_repo_root(text_dir)
+    except RepoConfigNotFoundError:
+        return text_dir.parent / DEFAULT_ARTIFACTS_DIR
+
+    artifacts_dir = get_artifacts_dir(repo_root=repo_root)
+    return repo_root / artifacts_dir
 
 
 def _resolve_source(*, text_dir: Path, version: str) -> BuildSource:

@@ -14,6 +14,7 @@ class RepoConfigNotFoundError(FileNotFoundError):
     """Raised when no `.mcodex/config.yaml` can be found by walking upwards."""
 
 
+DEFAULT_ARTIFACTS_DIR = "artifacts"
 DEFAULT_SNAPSHOT_COMMIT_TEMPLATE = "Snapshot: {slug} / {label} — {note}"
 DEFAULT_TEXT_PREFIX = "text_"
 
@@ -165,6 +166,37 @@ def get_text_prefix(
     if not value:
         return DEFAULT_TEXT_PREFIX
     return value
+
+
+def get_artifacts_dir(
+    *,
+    start: Path | None = None,
+    repo_root: Path | None = None,
+) -> str:
+    cfg = load_config(start=start, repo_root=repo_root)
+    raw = cfg.get("artifacts_dir")
+    if not isinstance(raw, str):
+        return DEFAULT_ARTIFACTS_DIR
+
+    value = raw.strip().strip("/")
+    if not value:
+        return DEFAULT_ARTIFACTS_DIR
+
+    if "/" in value or "\\" in value:
+        raise ValueError(
+            "Invalid artifacts_dir: must be a single directory name (no slashes)."
+        )
+
+    return value
+
+
+def resolve_artifacts_path(
+    *,
+    start: Path | None = None,
+    repo_root: Path | None = None,
+) -> Path:
+    root = repo_root or find_repo_root(start)
+    return root / get_artifacts_dir(repo_root=root)
 
 
 def save_authors(
