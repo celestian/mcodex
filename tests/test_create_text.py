@@ -9,16 +9,13 @@ from mcodex.services.author import author_add
 from mcodex.services.create_text import create_text, normalize_title
 
 
-@pytest.fixture()
-def config_path(tmp_path: Path) -> Path:
-    return tmp_path / "config.yaml"
-
-
 @pytest.fixture(autouse=True)
-def patch_config_path(monkeypatch: pytest.MonkeyPatch, config_path: Path) -> None:
-    from mcodex import config as config_module
-
-    monkeypatch.setattr(config_module, "default_config_path", lambda: config_path)
+def in_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    (repo / ".mcodex").mkdir(parents=True)
+    (repo / ".mcodex" / "config.yaml").write_text("{}\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    return repo
 
 
 def test_normalize_title_removes_diacritics_and_spaces() -> None:
@@ -30,7 +27,7 @@ def test_normalize_title_rejects_empty() -> None:
         normalize_title("   ")
 
 
-def test_create_text_creates_structure_and_metadata(tmp_path: Path) -> None:
+def test_create_text_creates_structure_and_metadata(in_repo: Path) -> None:
     author_add(
         nickname="Novy",
         first_name="Jan",
@@ -44,7 +41,7 @@ def test_create_text_creates_structure_and_metadata(tmp_path: Path) -> None:
         email="eva@example.com",
     )
 
-    root = tmp_path / "texts"
+    root = in_repo / "texts"
     root.mkdir()
 
     target = create_text(
@@ -72,8 +69,8 @@ def test_create_text_creates_structure_and_metadata(tmp_path: Path) -> None:
     assert authors[1]["first_name"] == "Eva Marie"
 
 
-def test_create_text_rejects_unknown_author(tmp_path: Path) -> None:
-    root = tmp_path / "texts"
+def test_create_text_rejects_unknown_author(in_repo: Path) -> None:
+    root = in_repo / "texts"
     root.mkdir()
 
     with pytest.raises(ValueError, match="Unknown author nickname"):
@@ -84,7 +81,7 @@ def test_create_text_rejects_unknown_author(tmp_path: Path) -> None:
         )
 
 
-def test_create_text_rejects_existing_target_dir(tmp_path: Path) -> None:
+def test_create_text_rejects_existing_target_dir(in_repo: Path) -> None:
     author_add(
         nickname="Novy",
         first_name="Jan",
@@ -92,7 +89,7 @@ def test_create_text_rejects_existing_target_dir(tmp_path: Path) -> None:
         email="jan.novak@example.com",
     )
 
-    root = tmp_path / "texts"
+    root = in_repo / "texts"
     root.mkdir()
 
     first = create_text(

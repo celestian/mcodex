@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from mcodex.config import load_authors
+from mcodex.config import find_repo_root, load_authors
 from mcodex.metadata import LATEST_METADATA_VERSION
 from mcodex.models import Author, TextMetadata
 
@@ -44,11 +44,12 @@ def _write_metadata(path: Path, meta: TextMetadata) -> None:
     path.write_text(out, encoding="utf-8")
 
 
-def _resolve_authors(nicknames: list[str]) -> list[Author]:
+def _resolve_authors(*, start: Path, nicknames: list[str]) -> list[Author]:
     if not nicknames:
         raise ValueError("At least one --author=<nickname> is required.")
 
-    authors_by_nick = load_authors()
+    repo_root = find_repo_root(start)
+    authors_by_nick = load_authors(repo_root=repo_root)
     unique: list[str] = []
     seen: set[str] = set()
 
@@ -81,7 +82,7 @@ def create_text(*, title: str, root: Path, author_nicknames: list[str]) -> Path:
     if target.exists():
         raise FileExistsError(f"Target directory already exists: {target}")
 
-    authors = _resolve_authors(author_nicknames)
+    authors = _resolve_authors(start=root, nicknames=author_nicknames)
 
     target.mkdir(parents=True, exist_ok=False)
     (target / "stages").mkdir(parents=True, exist_ok=False)

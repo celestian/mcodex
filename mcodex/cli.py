@@ -8,6 +8,7 @@ from mcodex.cli_utils import locate_text_dir
 from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.build import build_pdf
 from mcodex.services.create_text import create_text
+from mcodex.services.init_repo import init_repo
 from mcodex.services.snapshot import snapshot_create, snapshot_list
 from mcodex.services.status import show_status
 from mcodex.services.text_authors import text_author_add, text_author_remove
@@ -18,6 +19,7 @@ _DOC = """
 mcodex
 
 Usage:
+  mcodex init [--root=<dir>]
   mcodex create <title> [--root=<dir>] --author=<nickname>...
   mcodex author add <nickname> <first_name> <last_name> <email>
   mcodex author remove <nickname>
@@ -32,8 +34,8 @@ Usage:
   mcodex --version
 
 Options:
-  --root=<dir>   Target directory where the new text folder will be created.
-                 Used by `create` and as a lookup root for `build`.
+  --root=<dir>   Target directory used by `init` and `create`, and as a lookup
+                 root for `build`.
                  [default: .]
   --author=<nickname>  Author nickname (repeatable).
   --note=<text>  Optional note stored with the snapshot.
@@ -53,6 +55,12 @@ Snapshot stages:
 
 def main(argv: list[str] | None = None) -> int:
     args = docopt(_DOC, argv=argv, version=f"mcodex {__version__}")
+
+    if args.get("init"):
+        root = Path(args["--root"]).expanduser().resolve()
+        init_repo(root)
+        print(f"Initialized mcodex in: {root}")
+        return 0
 
     # IMPORTANT: "text author ..." also sets args["author"] to True.
     # Handle the more specific "text author" commands first.
