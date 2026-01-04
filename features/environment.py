@@ -7,15 +7,6 @@ from pathlib import Path
 from mcodex.services.fs import TEST_ROOT_MARKER, ensure_test_root_marker, safe_rmtree
 
 
-def _ensure_base_dir(context) -> None:
-    cfg = getattr(context, "config", None)
-    if cfg is not None and getattr(cfg, "base_dir", None):
-        context.base_dir = Path(cfg.base_dir)
-        return
-
-    context.base_dir = Path.cwd() / "features"
-
-
 def _git(*args: str, cwd: Path) -> None:
     subprocess.run(
         ["git", *args],
@@ -27,28 +18,35 @@ def _git(*args: str, cwd: Path) -> None:
 
 
 def before_scenario(context, scenario) -> None:
-    _ensure_base_dir(context)
+    # Stable root for the whole scenario; this is what we delete afterwards.
+    context.test_root = Path(tempfile.mkdtemp(prefix="mcodex_behave_")).resolve()
+    ensure_test_root_marker(context.test_root)
 
-    context.workdir = Path(tempfile.mkdtemp(prefix="mcodex_behave_"))
-    ensure_test_root_marker(context.workdir)
+    # The actual git repo lives inside test_root/repo so we can also create
+    # "outside repo" directories as siblings within test_root.
+    context.repo_root = context.test_root / "repo"
+    context.repo_root.mkdir(parents=True, exist_ok=True)
 
     try:
-        _git("init", "-b", "main", cwd=context.workdir)
+        _git("init", "-b", "main", cwd=context.repo_root)
     except subprocess.CalledProcessError:
-        _git("init", cwd=context.workdir)
-        _git("checkout", "-b", "main", cwd=context.workdir)
+        _git("init", cwd=context.repo_root)
+        _git("checkout", "-b", "main", cwd=context.repo_root)
 
-    _git("config", "user.name", "Behave", cwd=context.workdir)
-    _git("config", "user.email", "behave@example.invalid", cwd=context.workdir)
+    _git("config", "user.name", "Behave", cwd=context.repo_root)
+    _git("config", "user.email", "behave@example.invalid", cwd=context.repo_root)
 
-    (context.workdir / ".gitignore").write_text("", encoding="utf-8")
-    _git("add", ".gitignore", cwd=context.workdir)
-    _git("commit", "-m", "init", cwd=context.workdir)
+    (context.repo_root / ".gitignore").write_text("", encoding="utf-8")
+    _git("add", ".gitignore", cwd=context.repo_root)
+    _git("commit", "-m", "init", cwd=context.repo_root)
+
+    # Current working directory for steps
+    context.workdir = context.repo_root
 
 
 def after_scenario(context, scenario) -> None:
-    workdir = getattr(context, "workdir", None)
-    if workdir is None:
+    test_root = getattr(context, "test_root", None)
+    if test_root is None:
         return
 
-    safe_rmtree(Path(workdir), marker_name=TEST_ROOT_MARKER, ignore_errors=True)
+    safe_rmtree(Path(test_root), marker_name=TEST_ROOT_MARKER, ignore_errors=True)

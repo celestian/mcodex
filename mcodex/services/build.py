@@ -40,6 +40,24 @@ _LATEX_TEMPLATE = r"""\documentclass[12pt]{article}
 """
 
 
+def build(*, text_dir: Path, ref: str, pipeline: str = "pdf") -> Path:
+    """Build a document artifact.
+
+    Args:
+        text_dir: Path to the text directory.
+        ref: "." for worktree, otherwise a snapshot label.
+        pipeline: Build pipeline name. Supported: "pdf", "noop".
+    """
+
+    pipeline_name = str(pipeline or "pdf").strip().lower()
+    if pipeline_name == "pdf":
+        return build_pdf(text_dir=text_dir, version=ref)
+    if pipeline_name == "noop":
+        return _build_noop(text_dir=text_dir, version=ref)
+
+    raise ValueError(f"Unknown pipeline: {pipeline}")
+
+
 def build_pdf(*, text_dir: Path, version: str) -> Path:
     text_dir = text_dir.expanduser().resolve()
     source = _resolve_source(text_dir=text_dir, version=version)
@@ -54,6 +72,26 @@ def build_pdf(*, text_dir: Path, version: str) -> Path:
     _build_pdf_pipeline(
         source_dir=source.source_dir,
         output_path=out_path,
+    )
+    return out_path
+
+
+def _build_noop(*, text_dir: Path, version: str) -> Path:
+    """A test-friendly pipeline that only resolves and writes a dummy file."""
+
+    text_dir = text_dir.expanduser().resolve()
+    source = _resolve_source(text_dir=text_dir, version=version)
+    slug = _load_slug(source.source_dir)
+
+    out_dir = _resolve_artifacts_dir(text_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    out_name = f"{slug}_{source.version_label}.pdf"
+    out_path = out_dir / out_name
+
+    out_path.write_text(
+        f"noop build: {slug} / {source.version_label}\n",
+        encoding="utf-8",
     )
     return out_path
 
