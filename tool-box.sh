@@ -5,7 +5,8 @@ COMMAND="${1:-}"
 
 usage() {
     echo "Usage:"
-    echo "  ./tool-box.sh check   Run ruff, mypy, pytest (via uv)"
+    echo "  ./tool-box.sh fix     Auto-fix ruff issues (ruff check --fix + ruff format)"
+    echo "  ./tool-box.sh check   Run ruff, mypy, pytest, behave (via uv)"
     echo "  ./tool-box.sh sc      Create staged_commit.txt (staged files + diff + template)"
     echo "  ./tool-box.sh pr [base-ref]"
     echo "                        Create pull_request.txt (new commits above base-ref,"
@@ -31,6 +32,19 @@ require_cmd git
 require_cmd tar
 
 case "$COMMAND" in
+    fix)
+        echo "🔧 Syncing dependencies (including dev extras)..."
+        uv sync --extra dev
+
+        echo "🛠️  Running ruff check --fix..."
+        uv run --extra dev ruff check --fix .
+
+        echo "🎨 Running ruff format..."
+        uv run --extra dev ruff format .
+
+        echo "✅ Fix completed."
+        ;;
+
     check)
         echo "🔧 Syncing dependencies (including dev extras)..."
         uv sync --extra dev
@@ -108,4 +122,3 @@ case "$COMMAND" in
         exit 1
         ;;
 esac
-

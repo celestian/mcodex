@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
 from behave import given, then
+
+from mcodex.services.fs import TEST_ROOT_MARKER, safe_rmtree
 
 
 @given("I remove git repository")
 def step_remove_git_repo(context) -> None:
     git_dir = Path(context.workdir) / ".git"
     if git_dir.exists():
-        shutil.rmtree(git_dir)
+        safe_rmtree(git_dir, marker_name=TEST_ROOT_MARKER)
 
 
 @then('git tag "{tag}" exists')

@@ -148,9 +148,7 @@ def _build_pdf_pipeline(*, source_dir: Path, output_path: Path) -> None:
             log_path = tmp / "main.log"
             if log_path.exists():
                 tail = _tail_text_file(log_path, max_chars=6000)
-                raise RuntimeError(
-                    f"{exc}\n\n--- main.log (tail) ---\n{tail}"
-                ) from exc
+                raise RuntimeError(f"{exc}\n\n--- main.log (tail) ---\n{tail}") from exc
             raise
 
         built_pdf = tmp / "main.pdf"

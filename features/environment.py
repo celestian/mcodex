@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
+from mcodex.services.fs import TEST_ROOT_MARKER, ensure_test_root_marker, safe_rmtree
+
 
 def _ensure_base_dir(context) -> None:
-    # Behave normally provides this; make it explicit and robust.
     cfg = getattr(context, "config", None)
     if cfg is not None and getattr(cfg, "base_dir", None):
         context.base_dir = Path(cfg.base_dir)
-    else:
-        # Fallback: assume current working directory contains "features".
-        context.base_dir = Path.cwd() / "features"
+        return
+
+    context.base_dir = Path.cwd() / "features"
 
 
 def _git(*args: str, cwd: Path) -> None:
@@ -30,13 +30,12 @@ def _git(*args: str, cwd: Path) -> None:
 def before_scenario(context, scenario) -> None:
     _ensure_base_dir(context)
 
-    # Workspace outside the project repo to avoid git discovery climbing up.
     context.workdir = Path(tempfile.mkdtemp(prefix="mcodex_behave_"))
+    ensure_test_root_marker(context.workdir)
 
     context.cfg_path = context.workdir / "config.yaml"
     os.environ["MCODEX_CONFIG_PATH"] = str(context.cfg_path)
 
-    # Git identity for commits made by mcodex snapshot code.
     os.environ["GIT_AUTHOR_NAME"] = "Behave"
     os.environ["GIT_AUTHOR_EMAIL"] = "behave@example.invalid"
     os.environ["GIT_COMMITTER_NAME"] = "Behave"
@@ -64,5 +63,7 @@ def after_scenario(context, scenario) -> None:
     os.environ.pop("GIT_COMMITTER_EMAIL", None)
 
     workdir = getattr(context, "workdir", None)
-    if workdir is not None:
-        shutil.rmtree(str(workdir), ignore_errors=True)
+    if workdir is None:
+        return
+
+    safe_rmtree(Path(workdir), marker_name=TEST_ROOT_MARKER, ignore_errors=True)
