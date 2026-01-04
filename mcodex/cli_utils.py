@@ -4,52 +4,48 @@ from pathlib import Path
 
 from mcodex.config import find_repo_root, get_text_prefix, is_under_repo
 
+_METADATA = "metadata.yaml"
+
 
 def resolve_text_dir(text_dir: str | None) -> Path:
-    """Resolve text directory.
+    """Resolve a text directory for commands like `mcodex status`.
 
-    If text_dir is provided, use it.
-    Otherwise, use current working directory, but only if it
-    contains metadata.yaml.
+    If `text_dir` is provided, it can be either:
+      - a path to a text directory (must contain metadata.yaml), or
+      - a slug (without text prefix) when inside a mcodex repo.
 
-    Raises:
-        FileNotFoundError if metadata.yaml is missing.
+    If `text_dir` is None, this uses the current working directory, but only if
+    it contains metadata.yaml.
     """
-    if text_dir is not None:
-        return Path(text_dir)
+    cwd = Path.cwd().expanduser().resolve()
 
-    cwd = Path.cwd()
-    meta = cwd / "metadata.yaml"
-    if not meta.exists():
-        raise FileNotFoundError(
-            "No metadata.yaml found in current directory. "
-            "Run this command inside a text directory or "
-            "specify <text_dir> explicitly."
-        )
-    return cwd
+    if text_dir is None:
+        meta = cwd / _METADATA
+        if not meta.exists():
+            raise FileNotFoundError(
+                "No metadata.yaml found in current directory. "
+                "Run this command inside a text directory or "
+                "specify <text_dir> explicitly."
+            )
+        return cwd
+
+    return _resolve_text_arg(
+        text=text_dir,
+        cwd=cwd,
+        in_repo=is_under_repo(cwd),
+        arg_name="<text_dir>",
+        outside_repo_message=(
+            "Outside a mcodex repo, <text_dir> must be a path to a text directory."
+        ),
+        not_found_template="No metadata.yaml found for text '{text}'. Expected: {meta}",
+    )
 
 
 def locate_text_dir_for_build(*, text: str | None, ref: str | None) -> tuple[Path, str]:
-    """Locate a text directory and determine the ref selector for `mcodex build`.
-
-    Interpretation:
-      - ref == "." => working tree
-      - otherwise => snapshot label
-
-    Context-aware resolution:
-      - Inside a text directory:
-          mcodex build            -> (cwd, ".")
-          mcodex build <ref>      -> (cwd, <ref>)
-          mcodex build <text> <ref> -> (<text>, <ref>)
-      - Inside a mcodex repo, outside a text directory:
-          mcodex build <text>     -> (<text>, ".")
-          mcodex build <text> <ref>
-      - Outside a repo:
-          <text> must be a path (existing directory containing metadata.yaml)
-    """
+    """Locate a text directory and determine the ref selector for `mcodex build`."""
 
     cwd = Path.cwd().expanduser().resolve()
-    in_text_dir = (cwd / "metadata.yaml").exists()
+    in_text_dir = _is_text_dir(cwd)
     in_repo = is_under_repo(cwd)
 
     arg1 = (text or "").strip() or None
@@ -73,26 +69,25 @@ def locate_text_dir_for_build(*, text: str | None, ref: str | None) -> tuple[Pat
             "Outside a text directory, you must also specify <text>."
         )
 
-    text_dir = _resolve_text_arg(text=arg1, cwd=cwd, in_repo=in_repo)
+    text_dir = _resolve_text_arg(
+        text=arg1,
+        cwd=cwd,
+        in_repo=in_repo,
+        arg_name="<text>",
+        outside_repo_message=(
+            "Outside a mcodex repo, <text> must be a path to a text directory."
+        ),
+        not_found_template="No metadata.yaml found for text '{text}'. Expected: {meta}",
+    )
     return text_dir, arg2 or "."
 
 
-def locate_text_dir_for_snapshot(
-    *,
-    text: str | None,
-) -> Path:
-    """Locate a text directory for `mcodex snapshot`.
-
-    Rules:
-      - Inside a text dir: `mcodex snapshot <label>`.
-      - Inside a repo (anywhere): `mcodex snapshot <slug> <label>`.
-      - Outside a repo: only path is accepted.
-
-    The <slug> here is the *logical* slug (without the repo's text prefix).
-    """
+def locate_text_dir_for_snapshot(*, text: str | None) -> Path:
+    """Locate a text directory for `mcodex snapshot`."""
 
     cwd = Path.cwd().expanduser().resolve()
-    in_text_dir = (cwd / "metadata.yaml").exists()
+    in_text_dir = _is_text_dir(cwd)
+    in_repo = is_under_repo(cwd)
 
     if text is None:
         if not in_text_dir:
@@ -103,50 +98,51 @@ def locate_text_dir_for_snapshot(
             )
         return cwd
 
-    candidate = Path(text).expanduser()
-    if candidate.exists():
-        resolved = candidate.resolve()
-        meta = resolved / "metadata.yaml"
-        if not meta.exists():
-            raise FileNotFoundError(f"No metadata.yaml found: {meta}")
-        return resolved
-
-    if not is_under_repo(cwd):
-        raise FileNotFoundError(
+    return _resolve_text_arg(
+        text=text,
+        cwd=cwd,
+        in_repo=in_repo,
+        arg_name="<text>",
+        outside_repo_message=(
             "Not in a mcodex repo. Outside a repo, <text> must be a path."
-        )
-
-    repo_root = find_repo_root(cwd)
-    prefix = get_text_prefix(repo_root=repo_root)
-    text_dir = (repo_root / f"{prefix}{text}").expanduser().resolve()
-    meta = text_dir / "metadata.yaml"
-    if not meta.exists():
-        raise FileNotFoundError(
-            f"No metadata.yaml found for slug '{text}'. Expected: {meta}"
-        )
-    return text_dir
+        ),
+        not_found_template="No metadata.yaml found for slug '{text}'. Expected: {meta}",
+    )
 
 
-def _resolve_text_arg(*, text: str, cwd: Path, in_repo: bool) -> Path:
+def _is_text_dir(path: Path) -> bool:
+    return (path / _METADATA).is_file()
+
+
+def _resolve_text_arg(
+    *,
+    text: str,
+    cwd: Path,
+    in_repo: bool,
+    arg_name: str,
+    outside_repo_message: str,
+    not_found_template: str,
+) -> Path:
     candidate = Path(text).expanduser()
+
+    # Path form
     if candidate.exists():
         resolved = candidate.resolve()
-        meta = resolved / "metadata.yaml"
+        meta = resolved / _METADATA
         if not meta.exists():
             raise FileNotFoundError(f"No metadata.yaml found: {meta}")
         return resolved
 
+    # Slug form (only inside repo)
     if not in_repo:
-        raise FileNotFoundError(
-            "Outside a mcodex repo, <text> must be a path to a text directory."
-        )
+        raise FileNotFoundError(outside_repo_message)
 
     repo_root = find_repo_root(cwd)
     prefix = get_text_prefix(repo_root=repo_root)
     text_dir = (repo_root / f"{prefix}{text}").expanduser().resolve()
-    meta = text_dir / "metadata.yaml"
+    meta = text_dir / _METADATA
+
     if not meta.exists():
-        raise FileNotFoundError(
-            f"No metadata.yaml found for text '{text}'. Expected: {meta}"
-        )
+        raise FileNotFoundError(not_found_template.format(text=text, meta=meta))
+
     return text_dir
