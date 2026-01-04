@@ -19,6 +19,14 @@ def step_empty_config(context) -> None:
     cfg_path = cfg_dir / "config.yaml"
     cfg_path.write_text("{}\n", encoding="utf-8")
 
+    templates_dir = cfg_dir / "templates" / "text"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    (templates_dir / "todo.md").write_text("# TODO\n", encoding="utf-8")
+    (templates_dir / "checklist.md").write_text(
+        "# Checklist\n",
+        encoding="utf-8",
+    )
+
 
 @when('I run "{command}"')
 def step_run_command(context, command: str) -> None:

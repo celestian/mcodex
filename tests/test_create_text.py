@@ -14,6 +14,12 @@ def in_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     (repo / ".mcodex").mkdir(parents=True)
     (repo / ".mcodex" / "config.yaml").write_text("{}\n", encoding="utf-8")
+
+    templates_dir = repo / ".mcodex" / "templates" / "text"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    (templates_dir / "todo.md").write_text("# TODO\n", encoding="utf-8")
+    (templates_dir / "checklist.md").write_text("# Checklist\n", encoding="utf-8")
+
     monkeypatch.chdir(repo)
     return repo
 
@@ -41,8 +47,7 @@ def test_create_text_creates_structure_and_metadata(in_repo: Path) -> None:
         email="eva@example.com",
     )
 
-    root = in_repo / "texts"
-    root.mkdir()
+    root = in_repo
 
     target = create_text(
         title="Článek o něčem",
@@ -51,8 +56,12 @@ def test_create_text_creates_structure_and_metadata(in_repo: Path) -> None:
     )
 
     assert target.exists()
+    assert target.name == "text_clanek_o_necem"
     assert (target / "text.md").exists()
-    assert (target / "stages").is_dir()
+    assert (target / "todo.md").exists()
+    assert (target / "checklist.md").exists()
+    assert (target / ".snapshot").is_dir()
+    assert (target / ".snapshot" / ".gitkeep").exists()
     assert (target / "metadata.yaml").exists()
 
     data = yaml.safe_load((target / "metadata.yaml").read_text(encoding="utf-8"))
@@ -70,8 +79,7 @@ def test_create_text_creates_structure_and_metadata(in_repo: Path) -> None:
 
 
 def test_create_text_rejects_unknown_author(in_repo: Path) -> None:
-    root = in_repo / "texts"
-    root.mkdir()
+    root = in_repo
 
     with pytest.raises(ValueError, match="Unknown author nickname"):
         create_text(
@@ -89,8 +97,7 @@ def test_create_text_rejects_existing_target_dir(in_repo: Path) -> None:
         email="jan.novak@example.com",
     )
 
-    root = in_repo / "texts"
-    root.mkdir()
+    root = in_repo
 
     first = create_text(
         title="Duplicitní",

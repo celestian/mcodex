@@ -15,6 +15,7 @@ class RepoConfigNotFoundError(FileNotFoundError):
 
 
 DEFAULT_SNAPSHOT_COMMIT_TEMPLATE = "Snapshot: {slug} / {label} — {note}"
+DEFAULT_TEXT_PREFIX = "text_"
 
 
 def repo_config_path(repo_root: Path) -> Path:
@@ -149,6 +150,21 @@ def load_authors(
         )
 
     return out
+
+
+def get_text_prefix(
+    *,
+    start: Path | None = None,
+    repo_root: Path | None = None,
+) -> str:
+    cfg = load_config(start=start, repo_root=repo_root)
+    raw = cfg.get("text_prefix")
+    if not isinstance(raw, str):
+        return DEFAULT_TEXT_PREFIX
+    value = raw.strip()
+    if not value:
+        return DEFAULT_TEXT_PREFIX
+    return value
 
 
 def save_authors(

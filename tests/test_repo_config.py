@@ -42,3 +42,28 @@ def test_init_repo_creates_config_templates_and_gitignore(tmp_path: Path) -> Non
     init_repo(repo)
     gi2 = (repo / ".gitignore").read_text(encoding="utf-8")
     assert gi2.count("artifacts/") == 1
+
+
+def test_get_text_prefix_defaults_to_text_underscore(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    cfg_dir = repo / ".mcodex"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text("{}\n", encoding="utf-8")
+
+    from mcodex.config import get_text_prefix
+
+    assert get_text_prefix(repo_root=repo) == "text_"
+
+
+def test_get_text_prefix_reads_config(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    cfg_dir = repo / ".mcodex"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text(
+        "text_prefix: article_\n",
+        encoding="utf-8",
+    )
+
+    from mcodex.config import get_text_prefix
+
+    assert get_text_prefix(repo_root=repo) == "article_"
