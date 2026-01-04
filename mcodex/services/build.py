@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +14,8 @@ from mcodex.config import (
     get_artifacts_dir,
 )
 from mcodex.metadata import load_metadata
+
+_SNAP_RE = re.compile(r"^(?P<stage>[a-z]+)-(?P<num>[0-9]+)$")
 
 
 @dataclass(frozen=True)
@@ -45,7 +48,8 @@ def build(*, text_dir: Path, ref: str, pipeline: str = "pdf") -> Path:
 
     Args:
         text_dir: Path to the text directory.
-        ref: "." for worktree, otherwise a snapshot label.
+        ref: "." for worktree, a snapshot label (e.g. "draft-3"),
+             or a stage name (e.g. "draft") which resolves to latest "draft-N".
         pipeline: Build pipeline name. Supported: "pdf", "noop".
     """
 
@@ -112,18 +116,50 @@ def _resolve_artifacts_dir(text_dir: Path) -> Path:
     return repo_root / artifacts_dir
 
 
+def _latest_snapshot_for_stage(text_dir: Path, stage: str) -> str | None:
+    root = text_dir / ".snapshot"
+    if not root.exists():
+        return None
+
+    best_num: int | None = None
+    best_label: str | None = None
+
+    for p in root.iterdir():
+        if not p.is_dir() or p.name == ".gitkeep":
+            continue
+        m = _SNAP_RE.match(p.name)
+        if not m:
+            continue
+        if m.group("stage") != stage:
+            continue
+        num = int(m.group("num"))
+        if best_num is None or num > best_num:
+            best_num = num
+            best_label = p.name
+
+    return best_label
+
+
 def _resolve_source(*, text_dir: Path, version: str) -> BuildSource:
     label = str(version).strip() if version is not None else "."
     if label == ".":
         return BuildSource(source_dir=text_dir, version_label="worktree")
 
     snap_dir = text_dir / ".snapshot" / label
-    if not snap_dir.exists():
-        raise FileNotFoundError(f"Snapshot not found: {label}")
-    if not snap_dir.is_dir():
-        raise NotADirectoryError(f"Snapshot is not a directory: {snap_dir}")
+    if snap_dir.exists():
+        if not snap_dir.is_dir():
+            raise NotADirectoryError(f"Snapshot is not a directory: {snap_dir}")
+        return BuildSource(source_dir=snap_dir, version_label=label)
 
-    return BuildSource(source_dir=snap_dir, version_label=label)
+    # Stage form: "draft" -> latest "draft-N"
+    stage_candidate = label
+    if stage_candidate.isalpha() and stage_candidate.islower():
+        latest = _latest_snapshot_for_stage(text_dir, stage_candidate)
+        if latest is not None:
+            resolved = text_dir / ".snapshot" / latest
+            return BuildSource(source_dir=resolved, version_label=latest)
+
+    raise FileNotFoundError(f"Snapshot not found: {label}")
 
 
 def _load_slug(source_dir: Path) -> str:
@@ -186,9 +222,6 @@ def _build_pdf_pipeline(*, source_dir: Path, output_path: Path) -> None:
 
         main.write_text(_LATEX_TEMPLATE, encoding="utf-8")
 
-        # Force LuaLaTeX. latexmk internally calls the engine via the $pdflatex
-        # command variable even when the engine is not pdfTeX.
-        # This avoids surprises from latexmkrc defaults.
         try:
             _run(
                 [

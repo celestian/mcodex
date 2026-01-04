@@ -16,6 +16,15 @@ Feature: build resolution
     When I run "mcodex build story --pipeline=noop"
     Then a file "artifacts/story_worktree.pdf" exists
 
+  Scenario: Build stage resolves to latest snapshot of that stage
+    Given an empty mcodex config
+    When I run "mcodex author add celestian \"Jan\" \"Novák\" jan.novak@example.com"
+    And I run "mcodex create \"Story\" --author=celestian"
+    And I cd into "text_story"
+    When I run "mcodex snapshot draft --note \"first\""
+    And I run "mcodex build draft --pipeline=noop"
+    Then a file "{REPO_ROOT}/artifacts/story_draft-1.pdf" exists
+
   Scenario: Build outside repo requires a path
     Given an empty mcodex config
     When I run "mcodex author add celestian \"Jan\" \"Novák\" jan.novak@example.com"
