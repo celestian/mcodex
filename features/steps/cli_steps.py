@@ -8,8 +8,15 @@ import yaml
 from behave import given, then, when
 
 
-def _normalize_command(command: str) -> str:
-    return command.replace('\\"', '"').replace("\\'", "'")
+def _expand_placeholders(context, value: str) -> str:
+    repo_root = str(getattr(context, "repo_root", ""))
+    workdir = str(getattr(context, "workdir", ""))
+    return value.replace("{REPO_ROOT}", repo_root).replace("{WORKDIR}", workdir)
+
+
+def _normalize_command(context, command: str) -> str:
+    unescaped = command.replace('\\"', '"').replace("\\'", "'")
+    return _expand_placeholders(context, unescaped)
 
 
 @given("an empty mcodex config")
@@ -30,7 +37,7 @@ def step_empty_config(context) -> None:
 
 @when('I run "{command}"')
 def step_run_command(context, command: str) -> None:
-    command = _normalize_command(command)
+    command = _normalize_command(context, command)
     args = shlex.split(command)
 
     completed = subprocess.run(
@@ -60,18 +67,21 @@ def step_text_dir_exists(context, slug: str) -> None:
 
 @then('a file "{relpath}" exists')
 def step_file_exists(context, relpath: str) -> None:
+    relpath = _expand_placeholders(context, relpath)
     p = Path(context.workdir) / relpath
     assert p.exists() and p.is_file(), f"Missing file: {p}"
 
 
 @then('a directory "{relpath}" exists')
 def step_dir_exists(context, relpath: str) -> None:
+    relpath = _expand_placeholders(context, relpath)
     p = Path(context.workdir) / relpath
     assert p.exists() and p.is_dir(), f"Missing directory: {p}"
 
 
 @then('the file "{relpath}" contains "{text}"')
 def step_file_contains(context, relpath: str, text: str) -> None:
+    relpath = _expand_placeholders(context, relpath)
     p = Path(context.workdir) / relpath
     assert p.exists() and p.is_file(), f"Missing file: {p}"
     data = p.read_text(encoding="utf-8")
@@ -86,6 +96,7 @@ def _load_metadata(context, slug: str) -> dict:
 
 @then('the metadata in "{slug}" contains author "{nickname}"')
 def step_metadata_contains_author(context, slug: str, nickname: str) -> None:
+    slug = _expand_placeholders(context, slug)
     data = _load_metadata(context, slug)
 
     assert data.get("metadata_version") == 1
@@ -98,6 +109,7 @@ def step_metadata_contains_author(context, slug: str, nickname: str) -> None:
 
 @then('the metadata in "{slug}" does not contain author "{nickname}"')
 def step_metadata_not_contains_author(context, slug: str, nickname: str) -> None:
+    slug = _expand_placeholders(context, slug)
     data = _load_metadata(context, slug)
 
     assert data.get("metadata_version") == 1
@@ -110,7 +122,7 @@ def step_metadata_not_contains_author(context, slug: str, nickname: str) -> None
 
 @then('running "{command}" fails with "{message}"')
 def step_run_fails_with(context, command: str, message: str) -> None:
-    command = _normalize_command(command)
+    command = _normalize_command(context, command)
     args = shlex.split(command)
 
     completed = subprocess.run(

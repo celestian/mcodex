@@ -4,9 +4,9 @@ from pathlib import Path
 
 from docopt import docopt
 
-from mcodex.cli_utils import locate_text_dir, locate_text_dir_for_snapshot
+from mcodex.cli_utils import locate_text_dir_for_build, locate_text_dir_for_snapshot
 from mcodex.services.author import author_add, author_list, author_remove
-from mcodex.services.build import build_pdf
+from mcodex.services.build import build
 from mcodex.services.create_text import create_text
 from mcodex.services.init_repo import init_repo
 from mcodex.services.snapshot import snapshot_create, snapshot_list
@@ -26,7 +26,7 @@ Usage:
   mcodex author list
   mcodex text author add <text_dir> <nickname>
   mcodex text author remove <text_dir> <nickname>
-  mcodex build [<slug>] [<version>] [--root=<dir>]
+  mcodex build [<text>] [<ref>] [--pipeline=<name>]
   mcodex snapshot <label> [--note=<note>]
   mcodex snapshot <text> <label> [--note=<note>]
   mcodex snapshot list
@@ -37,18 +37,26 @@ Usage:
 
 Options:
   --root=<dir>   Target directory used by `init` and `create`, and as a lookup
-                 root for `build`.
+                 root for `create`.
                  [default: .]
   --author=<nickname>  Author nickname (repeatable).
   --note=<note>  Optional note stored with the snapshot.
+  --pipeline=<name>  Build pipeline to use. [default: pdf]
   -h --help      Show this screen.
   --version      Show version.
 
 Build:
-  <slug> is the text folder name under --root (default: .).
-  <version> is '.' for worktree, or a snapshot label.
-  When run inside a text directory, a single positional arg is treated
-  as <version>.
+  <ref> is '.' for worktree, or a snapshot label.
+
+  Context-aware argument resolution:
+    - Inside a text directory:
+        mcodex build            -> uses <ref>='.'
+        mcodex build <ref>      -> builds that ref for current text
+    - Inside a repo (outside a text directory):
+        mcodex build <text>     -> builds worktree for that text
+        mcodex build <text> <ref>
+    - Outside a repo:
+        mcodex build <path> [<ref>]
 
 Snapshot:
   <text> is optional when run inside a text directory.
@@ -100,16 +108,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args["build"]:
-        root = Path(args["--root"]).expanduser().resolve()
-        slug = args["<slug>"]
-        version = args["<version>"]
+        text = args["<text>"]
+        ref = args["<ref>"]
+        pipeline = args["--pipeline"]
 
-        text_dir, resolved_version = locate_text_dir(
-            root=root,
-            slug=slug,
-            version=version,
-        )
-        out = build_pdf(text_dir=text_dir, version=resolved_version)
+        text_dir, resolved_ref = locate_text_dir_for_build(text=text, ref=ref)
+        out = build(text_dir=text_dir, ref=resolved_ref, pipeline=pipeline)
         print(out)
         return 0
 
