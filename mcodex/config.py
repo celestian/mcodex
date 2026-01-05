@@ -19,6 +19,37 @@ DEFAULT_SNAPSHOT_COMMIT_TEMPLATE = "Snapshot: {slug} / {label} — {note}"
 DEFAULT_TEXT_PREFIX = "text_"
 
 
+DEFAULT_PIPELINES: dict[str, Any] = {
+    "pdf_pandoc": {
+        "steps": [
+            {"kind": "pandoc", "from": "markdown", "to": "pdf"},
+        ],
+    },
+    "docx": {
+        "steps": [
+            {"kind": "pandoc", "from": "markdown", "to": "docx"},
+        ],
+    },
+    "latex": {
+        "steps": [
+            {"kind": "pandoc", "from": "markdown", "to": "latex"},
+        ],
+    },
+    "pdf": {
+        "steps": [
+            {
+                "kind": "pandoc",
+                "from": "markdown",
+                "to": "latex",
+                "output": "body_raw.tex",
+            },
+            {"kind": "vlna", "input": "body_raw.tex", "output": "body.tex"},
+            {"kind": "latexmk", "engine": "lualatex", "main": "main.tex"},
+        ],
+    },
+}
+
+
 def repo_config_path(repo_root: Path) -> Path:
     return repo_root.expanduser().resolve() / ".mcodex" / "config.yaml"
 
@@ -104,6 +135,99 @@ def ensure_defaults(
         save_config(cfg, start=start, repo_root=repo_root)
 
     return cfg
+
+
+def get_pipelines(
+    *,
+    start: Path | None = None,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    cfg = load_config(start=start, repo_root=repo_root)
+    raw = cfg.get("pipelines")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Invalid config: pipelines must be a mapping.")
+    return raw
+
+
+def validate_pipelines(pipelines: dict[str, Any]) -> None:
+    if not isinstance(pipelines, dict) or not pipelines:
+        raise ValueError("Invalid config: pipelines must be a non-empty mapping.")
+
+    for name, pipe in pipelines.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Invalid config: pipeline names must be non-empty.")
+        if not isinstance(pipe, dict):
+            raise ValueError(f"Invalid config: pipeline '{name}' must be a mapping.")
+
+        steps = pipe.get("steps")
+        if not isinstance(steps, list) or not steps:
+            raise ValueError(
+                f"Invalid config: pipeline '{name}' must have non-empty steps."
+            )
+
+        for i, step in enumerate(steps):
+            if not isinstance(step, dict):
+                raise ValueError(
+                    f"Invalid config: pipeline '{name}' step {i} must be a mapping."
+                )
+            kind = step.get("kind")
+            if not isinstance(kind, str) or not kind.strip():
+                raise ValueError(
+                    f"Invalid config: pipeline '{name}' step {i} missing kind."
+                )
+            if kind not in {"pandoc", "vlna", "latexmk"}:
+                raise ValueError(
+                    f"Invalid config: pipeline '{name}' step {i} unknown kind: {kind}"
+                )
+
+            if kind == "pandoc":
+                _require_non_empty_str(step, "from", name, i)
+                _require_non_empty_str(step, "to", name, i)
+            if kind == "vlna":
+                _require_non_empty_str(step, "input", name, i)
+                _require_non_empty_str(step, "output", name, i)
+            if kind == "latexmk":
+                engine = step.get("engine")
+                if engine is not None:
+                    _require_non_empty_str(step, "engine", name, i)
+                _require_non_empty_str(step, "main", name, i)
+
+
+def _require_non_empty_str(
+    step: dict[str, Any],
+    field: str,
+    pipeline_name: str,
+    step_index: int,
+) -> None:
+    raw = step.get(field)
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(
+            "Invalid config: "
+            f"pipeline '{pipeline_name}' step {step_index} missing '{field}'."
+        )
+
+
+def get_pipeline(
+    pipeline_name: str,
+    *,
+    start: Path | None = None,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    pipelines = get_pipelines(start=start, repo_root=repo_root)
+    validate_pipelines(pipelines)
+
+    name = str(pipeline_name or "").strip()
+    if not name:
+        raise ValueError("Pipeline name cannot be empty.")
+
+    pipe = pipelines.get(name)
+    if pipe is None:
+        raise KeyError(f"Pipeline not found in config: {name}")
+    if not isinstance(pipe, dict):
+        raise ValueError(f"Invalid pipeline config for '{name}'.")
+    return pipe
 
 
 def get_snapshot_commit_template(
