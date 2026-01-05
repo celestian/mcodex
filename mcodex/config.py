@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from mcodex.errors import PipelineConfigError, PipelineNotFoundError
 from mcodex.models import Author
 
 
@@ -147,38 +148,44 @@ def get_pipelines(
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ValueError("Invalid config: pipelines must be a mapping.")
+        raise PipelineConfigError("Invalid config: pipelines must be a mapping.")
     return raw
 
 
 def validate_pipelines(pipelines: dict[str, Any]) -> None:
     if not isinstance(pipelines, dict) or not pipelines:
-        raise ValueError("Invalid config: pipelines must be a non-empty mapping.")
+        raise PipelineConfigError(
+            "Invalid config: pipelines must be a non-empty mapping."
+        )
 
     for name, pipe in pipelines.items():
         if not isinstance(name, str) or not name.strip():
-            raise ValueError("Invalid config: pipeline names must be non-empty.")
+            raise PipelineConfigError(
+                "Invalid config: pipeline names must be non-empty."
+            )
         if not isinstance(pipe, dict):
-            raise ValueError(f"Invalid config: pipeline '{name}' must be a mapping.")
+            raise PipelineConfigError(
+                f"Invalid config: pipeline '{name}' must be a mapping."
+            )
 
         steps = pipe.get("steps")
         if not isinstance(steps, list) or not steps:
-            raise ValueError(
+            raise PipelineConfigError(
                 f"Invalid config: pipeline '{name}' must have non-empty steps."
             )
 
         for i, step in enumerate(steps):
             if not isinstance(step, dict):
-                raise ValueError(
+                raise PipelineConfigError(
                     f"Invalid config: pipeline '{name}' step {i} must be a mapping."
                 )
             kind = step.get("kind")
             if not isinstance(kind, str) or not kind.strip():
-                raise ValueError(
+                raise PipelineConfigError(
                     f"Invalid config: pipeline '{name}' step {i} missing kind."
                 )
             if kind not in {"pandoc", "vlna", "latexmk"}:
-                raise ValueError(
+                raise PipelineConfigError(
                     f"Invalid config: pipeline '{name}' step {i} unknown kind: {kind}"
                 )
 
@@ -203,7 +210,7 @@ def _require_non_empty_str(
 ) -> None:
     raw = step.get(field)
     if not isinstance(raw, str) or not raw.strip():
-        raise ValueError(
+        raise PipelineConfigError(
             "Invalid config: "
             f"pipeline '{pipeline_name}' step {step_index} missing '{field}'."
         )
@@ -220,13 +227,14 @@ def get_pipeline(
 
     name = str(pipeline_name or "").strip()
     if not name:
-        raise ValueError("Pipeline name cannot be empty.")
+        raise PipelineConfigError("Pipeline name cannot be empty.")
 
     pipe = pipelines.get(name)
     if pipe is None:
-        raise KeyError(f"Pipeline not found in config: {name}")
+        available = tuple(sorted(str(n) for n in pipelines.keys()))
+        raise PipelineNotFoundError(requested=name, available=available)
     if not isinstance(pipe, dict):
-        raise ValueError(f"Invalid pipeline config for '{name}'.")
+        raise PipelineConfigError(f"Invalid pipeline config for '{name}'.")
     return pipe
 
 
