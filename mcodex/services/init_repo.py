@@ -14,7 +14,51 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "snapshot": "Snapshot: {slug} / {label} — {note}",
         }
     },
-    "pipelines": {},
+    "pipelines": {
+        # 1) md -> pandoc -> pdf
+        "pdf_pandoc": {
+            "steps": [
+                {"kind": "pandoc", "from": "markdown", "to": "pdf"},
+            ],
+        },
+        # 2) md -> pandoc -> docx
+        "docx": {
+            "steps": [
+                {"kind": "pandoc", "from": "markdown", "to": "docx"},
+            ],
+        },
+        # 3) md -> pandoc -> latex
+        "latex": {
+            "steps": [
+                {
+                    "kind": "pandoc",
+                    "from": "markdown",
+                    "to": "latex",
+                },
+            ],
+        },
+        # 4) md -> pandoc -> vlna -> latexmk(lualatex) -> pdf (default)
+        "pdf": {
+            "steps": [
+                {
+                    "kind": "pandoc",
+                    "from": "markdown",
+                    "to": "latex",
+                    "output": "body_raw.tex",
+                },
+                {
+                    "kind": "vlna",
+                    "input": "body_raw.tex",
+                    "output": "body.tex",
+                },
+                {
+                    "kind": "latexmk",
+                    "engine": "lualatex",
+                    "main": "main.tex",
+                },
+            ],
+        },
+    },
 }
 
 

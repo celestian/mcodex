@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,6 +11,7 @@ from mcodex.config import (
     get_artifacts_dir,
 )
 from mcodex.metadata import load_metadata
+from mcodex.services.pipeline import run_pipeline
 
 _SNAP_RE = re.compile(r"^(?P<stage>[a-z]+)-(?P<num>[0-9]+)$")
 
@@ -22,25 +20,6 @@ _SNAP_RE = re.compile(r"^(?P<stage>[a-z]+)-(?P<num>[0-9]+)$")
 class BuildSource:
     source_dir: Path
     version_label: str
-
-
-_LATEX_TEMPLATE = r"""\documentclass[12pt]{article}
-
-\usepackage[a4paper,margin=25mm]{geometry}
-\usepackage{fontspec}
-\usepackage{microtype}
-\usepackage{setspace}
-\usepackage{parskip}
-\usepackage{hyperref}
-
-\providecommand{\tightlist}{}
-
-\setstretch{1.15}
-
-\begin{document}
-\input{body.tex}
-\end{document}
-"""
 
 
 def build(*, text_dir: Path, ref: str, pipeline: str = "pdf") -> Path:
@@ -54,30 +33,30 @@ def build(*, text_dir: Path, ref: str, pipeline: str = "pdf") -> Path:
     """
 
     pipeline_name = str(pipeline or "pdf").strip().lower()
-    if pipeline_name == "pdf":
-        return build_pdf(text_dir=text_dir, version=ref)
     if pipeline_name == "noop":
         return _build_noop(text_dir=text_dir, version=ref)
 
-    raise ValueError(f"Unknown pipeline: {pipeline}")
-
-
-def build_pdf(*, text_dir: Path, version: str) -> Path:
     text_dir = text_dir.expanduser().resolve()
-    source = _resolve_source(text_dir=text_dir, version=version)
+    source = _resolve_source(text_dir=text_dir, version=ref)
     slug = _load_slug(source.source_dir)
 
     out_dir = _resolve_artifacts_dir(text_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    out_name = f"{slug}_{source.version_label}.pdf"
+    out_ext = _pipeline_output_ext(pipeline_name)
+    out_name = f"{slug}_{source.version_label}.{out_ext}"
     out_path = out_dir / out_name
 
-    _build_pdf_pipeline(
+    run_pipeline(
+        pipeline_name=pipeline_name,
         source_dir=source.source_dir,
         output_path=out_path,
     )
     return out_path
+
+
+def build_pdf(*, text_dir: Path, version: str) -> Path:
+    return build(text_dir=text_dir, ref=version, pipeline="pdf")
 
 
 def _build_noop(*, text_dir: Path, version: str) -> Path:
@@ -114,6 +93,16 @@ def _resolve_artifacts_dir(text_dir: Path) -> Path:
 
     artifacts_dir = get_artifacts_dir(repo_root=repo_root)
     return repo_root / artifacts_dir
+
+
+def _pipeline_output_ext(pipeline_name: str) -> str:
+    if pipeline_name == "docx":
+        return "docx"
+    if pipeline_name == "latex":
+        return "tex"
+    if pipeline_name in {"pdf", "pdf_pandoc"}:
+        return "pdf"
+    return "pdf"
 
 
 def _latest_snapshot_for_stage(text_dir: Path, stage: str) -> str | None:
@@ -168,116 +157,3 @@ def _load_slug(source_dir: Path) -> str:
     if slug:
         return slug
     return source_dir.name
-
-
-def _require_executable(name: str) -> str:
-    path = shutil.which(name)
-    if path is None:
-        raise RuntimeError(
-            f"Required executable not found: {name}. "
-            "Install it and ensure it is on PATH."
-        )
-    return path
-
-
-def _build_pdf_pipeline(*, source_dir: Path, output_path: Path) -> None:
-    pandoc = _require_executable("pandoc")
-    vlna = _require_executable("vlna")
-    latexmk = _require_executable("latexmk")
-
-    src = source_dir / "text.md"
-    if not src.exists():
-        raise FileNotFoundError(f"Source text not found: {src}")
-
-    with tempfile.TemporaryDirectory(prefix="mcodex-build-") as td:
-        tmp = Path(td)
-        body_raw = tmp / "body_raw.tex"
-        body = tmp / "body.tex"
-        main = tmp / "main.tex"
-
-        _run(
-            [
-                pandoc,
-                str(src),
-                "--from=markdown",
-                "--to=latex",
-                "-o",
-                str(body_raw),
-            ],
-            cwd=source_dir,
-        )
-
-        _run(
-            [
-                vlna,
-                "-f",
-                "-l",
-                "-m",
-                "-n",
-                str(body_raw),
-                str(body),
-            ],
-            cwd=tmp,
-        )
-
-        main.write_text(_LATEX_TEMPLATE, encoding="utf-8")
-
-        try:
-            _run(
-                [
-                    latexmk,
-                    "-pdf",
-                    "-interaction=nonstopmode",
-                    "-halt-on-error",
-                    "-file-line-error",
-                    "-e",
-                    "$pdflatex=q/lualatex %O %S/;",
-                    str(main.name),
-                ],
-                cwd=tmp,
-            )
-        except RuntimeError as exc:
-            log_path = tmp / "main.log"
-            if log_path.exists():
-                tail = _tail_text_file(log_path, max_chars=6000)
-                raise RuntimeError(f"{exc}\n\n--- main.log (tail) ---\n{tail}") from exc
-            raise
-
-        built_pdf = tmp / "main.pdf"
-        if not built_pdf.exists():
-            raise RuntimeError("latexmk finished without producing main.pdf")
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(built_pdf, output_path)
-
-
-def _tail_text_file(path: Path, *, max_chars: int) -> str:
-    data = path.read_text(encoding="utf-8", errors="replace")
-    if len(data) <= max_chars:
-        return data
-    return data[-max_chars:]
-
-
-def _run(cmd: list[str], *, cwd: Path) -> None:
-    completed = subprocess.run(
-        cmd,
-        cwd=str(cwd),
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        stdout = (completed.stdout or "").strip()
-        stderr = (completed.stderr or "").strip()
-
-        parts: list[str] = [f"Command failed: {' '.join(cmd)}"]
-        if stdout:
-            parts.append("--- stdout ---")
-            parts.append(stdout)
-        if stderr:
-            parts.append("--- stderr ---")
-            parts.append(stderr)
-        if not stdout and not stderr:
-            parts.append("(no output)")
-
-        raise RuntimeError("\n".join(parts))

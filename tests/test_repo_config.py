@@ -39,6 +39,9 @@ def test_init_repo_creates_config_templates_and_gitignore(tmp_path: Path) -> Non
     gi = (repo / ".gitignore").read_text(encoding="utf-8")
     assert "artifacts/" in gi
 
+    cfg = (repo / ".mcodex" / "config.yaml").read_text(encoding="utf-8")
+    assert "pipelines:" in cfg
+
     init_repo(repo)
     gi2 = (repo / ".gitignore").read_text(encoding="utf-8")
     assert gi2.count("artifacts/") == 1
