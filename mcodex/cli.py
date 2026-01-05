@@ -11,6 +11,7 @@ from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.build import build
 from mcodex.services.create_text import create_text
 from mcodex.services.init_repo import init_repo
+from mcodex.services.pipeline_list import pipeline_list
 from mcodex.services.snapshot import snapshot_create, snapshot_list
 from mcodex.services.status import show_status
 from mcodex.services.text_authors import text_author_add, text_author_remove
@@ -28,6 +29,7 @@ Usage:
   mcodex author list
   mcodex text author add <text_dir> <nickname>
   mcodex text author remove <text_dir> <nickname>
+  mcodex pipeline list
   mcodex build [<text>] [<ref>] [--pipeline=<name>]
   mcodex snapshot <label> [--note=<note>]
   mcodex snapshot <text> <label> [--note=<note>]
@@ -74,6 +76,17 @@ def main(argv: list[str] | None = None) -> int:
         root = Path(args["--root"]).expanduser().resolve()
         init_repo(root)
         print(f"Initialized mcodex in: {root}")
+        return 0
+
+    if args.get("pipeline") and args.get("list"):
+        try:
+            pipeline_list()
+        except McodexError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        except (FileNotFoundError, NotADirectoryError, RuntimeError, ValueError) as e:
+            print(str(e), file=sys.stderr)
+            return 2
         return 0
 
     # IMPORTANT: "text author ..." also sets args["author"] to True.
