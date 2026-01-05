@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from docopt import docopt
 
 from mcodex.cli_utils import locate_text_dir_for_build, locate_text_dir_for_snapshot
+from mcodex.errors import McodexError
 from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.build import build
 from mcodex.services.create_text import create_text
@@ -112,8 +114,16 @@ def main(argv: list[str] | None = None) -> int:
         ref = args["<ref>"]
         pipeline = args["--pipeline"]
 
-        text_dir, resolved_ref = locate_text_dir_for_build(text=text, ref=ref)
-        out = build(text_dir=text_dir, ref=resolved_ref, pipeline=pipeline)
+        try:
+            text_dir, resolved_ref = locate_text_dir_for_build(text=text, ref=ref)
+            out = build(text_dir=text_dir, ref=resolved_ref, pipeline=pipeline)
+        except McodexError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        except (FileNotFoundError, NotADirectoryError, RuntimeError) as e:
+            print(str(e), file=sys.stderr)
+            return 2
+
         print(out)
         return 0
 
