@@ -22,7 +22,7 @@ _DOC = """
 mcodex
 
 Usage:
-  mcodex init [--root=<dir>]
+  mcodex init [--root=<dir>] [--force]
   mcodex create <title> [--root=<dir>] --author=<nickname>...
   mcodex author add <nickname> <first_name> <last_name> <email>
   mcodex author remove <nickname>
@@ -43,6 +43,7 @@ Options:
   --root=<dir>   Target directory used by `init` and `create`, and as a lookup
                  root for `create`.
                  [default: .]
+  --force        Overwrite existing template files when running `init`.
   --author=<nickname>  Author nickname (repeatable).
   --note=<note>  Optional note stored with the snapshot.
   --pipeline=<name>  Build pipeline to use. [default: pdf]
@@ -74,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.get("init"):
         root = Path(args["--root"]).expanduser().resolve()
-        init_repo(root)
+        init_repo(root, force=bool(args["--force"]))
         print(f"Initialized mcodex in: {root}")
         return 0
 

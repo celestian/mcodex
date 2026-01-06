@@ -13,6 +13,8 @@ def test_init_copies_templates_into_repo(tmp_path: Path) -> None:
 
     templates_root = repo_root / ".mcodex" / "templates"
 
+    assert (templates_root / "README.md").exists()
+
     assert (templates_root / "text" / "todo.md").exists()
     assert (templates_root / "text" / "checklist.md").exists()
     assert (templates_root / "text" / "README.txt").exists()

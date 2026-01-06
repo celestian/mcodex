@@ -4,6 +4,7 @@ Feature: mcodex init
     When I run "mcodex init"
     Then a file ".mcodex/config.yaml" exists
     And a directory ".mcodex/templates" exists
+    And a file ".mcodex/templates/README.md" exists
     And a directory ".mcodex/templates/text" exists
     And a directory ".mcodex/templates/latex" exists
     And a directory ".mcodex/templates/pandoc" exists
