@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import importlib.resources
 import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -62,6 +64,70 @@ def _default_run(cmd: list[str], cwd: Path) -> None:
     raise RuntimeError("\n".join(parts))
 
 
+def _copy_dir_contents(src_dir: Path, dst_dir: Path) -> None:
+    if not src_dir.exists() or not src_dir.is_dir():
+        raise FileNotFoundError(f"Template directory not found: {src_dir}")
+
+    for item in src_dir.rglob("*"):
+        rel = item.relative_to(src_dir)
+        target = dst_dir / rel
+
+        if item.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(item, target)
+
+
+def _repo_templates_root(source_dir: Path) -> Path | None:
+    try:
+        repo_root = find_repo_root(source_dir)
+    except RepoConfigNotFoundError:
+        return None
+
+    return repo_root / ".mcodex" / "templates"
+
+
+def _package_templates_root(exit_stack: ExitStack) -> Path:
+    traversable = importlib.resources.files("mcodex.package_templates").joinpath(
+        "templates"
+    )
+    src = exit_stack.enter_context(importlib.resources.as_file(traversable))
+    return Path(src)
+
+
+def _templates_root(source_dir: Path, exit_stack: ExitStack) -> Path:
+    repo_root = _repo_templates_root(source_dir)
+    if repo_root is not None:
+        return repo_root
+    return _package_templates_root(exit_stack)
+
+
+def _pandoc_template_args(*, templates_root: Path, to: str) -> list[str]:
+    pandoc_dir = templates_root / "pandoc"
+    if not pandoc_dir.exists():
+        return []
+
+    args: list[str] = []
+
+    if to == "docx":
+        ref = pandoc_dir / "reference.docx"
+        if ref.exists() and ref.is_file():
+            args.append(f"--reference-doc={ref}")
+
+    if to == "pdf":
+        tex_tmpl = pandoc_dir / "template.tex"
+        if tex_tmpl.exists() and tex_tmpl.is_file():
+            args.append(f"--template={tex_tmpl}")
+
+    return args
+
+
+def _latex_templates_dir(templates_root: Path) -> Path:
+    return templates_root / "latex"
+
+
 def run_pipeline(
     *,
     pipeline_name: str,
@@ -74,6 +140,9 @@ def run_pipeline(
 
     The pipeline is taken from `.mcodex/config.yaml` if `source_dir` is in a
     mcodex repo; otherwise `DEFAULT_PIPELINES` are used.
+
+    Templates are resolved from `.mcodex/templates/...` when running inside a
+    repo and from packaged defaults otherwise.
     """
 
     source_dir = source_dir.expanduser().resolve()
@@ -96,157 +165,126 @@ def run_pipeline(
     if not src_md.exists():
         raise FileNotFoundError(f"Source text not found: {src_md}")
 
-    with tempfile.TemporaryDirectory(prefix="mcodex-build-") as td:
-        tmp = Path(td)
+    with ExitStack() as stack:
+        templates_root = _templates_root(source_dir, stack)
 
-        env: dict[str, Path] = {
-            "source": src_md,
-        }
+        with tempfile.TemporaryDirectory(prefix="mcodex-build-") as td:
+            tmp = Path(td)
 
-        for step in steps:
-            kind = str(step["kind"]).strip()
+            env: dict[str, Path] = {
+                "source": src_md,
+            }
 
-            if kind == "pandoc":
-                pandoc = _require_executable("pandoc")
-                to = str(step["to"]).strip()
-                from_ = str(step["from"]).strip()
+            for step in steps:
+                kind = str(step["kind"]).strip()
 
-                if to in {"pdf", "docx"}:
-                    out = output_path
-                else:
-                    out_name = str(step.get("output") or "body_raw.tex")
-                    out = tmp / out_name
+                if kind == "pandoc":
+                    pandoc = _require_executable("pandoc")
+                    to = str(step["to"]).strip()
+                    from_ = str(step["from"]).strip()
 
-                cmd = [
-                    pandoc,
-                    str(env["source"]),
-                    f"--from={from_}",
-                    f"--to={to}",
-                    "-o",
-                    str(out),
-                ]
-                commands.append(cmd)
-                if not dry_run:
-                    runner(cmd, source_dir)
-                env["pandoc_out"] = out
-                continue
-
-            if kind == "vlna":
-                vlna = _require_executable("vlna")
-                inp = tmp / str(step["input"]).strip()
-                out = tmp / str(step["output"]).strip()
-                cmd = [
-                    vlna,
-                    "-f",
-                    "-l",
-                    "-m",
-                    "-n",
-                    str(inp),
-                    str(out),
-                ]
-                commands.append(cmd)
-                if not dry_run:
-                    runner(cmd, tmp)
-                env["vlna_out"] = out
-                continue
-
-            if kind == "latexmk":
-                latexmk = _require_executable("latexmk")
-                engine = str(step.get("engine") or "lualatex").strip()
-                main_name = str(step["main"]).strip()
-                main = tmp / main_name
-
-                body = env.get("vlna_out") or env.get("pandoc_out")
-                if not isinstance(body, Path):
-                    raise RuntimeError(
-                        "latexmk step requires prior pandoc output (and vlna "
-                        "output, if configured)."
-                    )
-
-                if not dry_run:
-                    if not body.exists():
-                        raise RuntimeError(
-                            f"latexmk step missing prior output file: {body}"
-                        )
-
-                    # Prefer repo template if available; fall back to a minimal one.
-                    template = _try_find_repo_template(source_dir)
-                    if template is not None:
-                        main.write_text(
-                            template.read_text(encoding="utf-8"),
-                            encoding="utf-8",
-                        )
+                    if to in {"pdf", "docx"}:
+                        out = output_path
                     else:
-                        main.write_text(
-                            _fallback_latex_template(),
+                        out_name = str(step.get("output") or "body_raw.tex")
+                        out = tmp / out_name
+
+                    cmd = [
+                        pandoc,
+                        str(env["source"]),
+                        f"--from={from_}",
+                        f"--to={to}",
+                        *_pandoc_template_args(templates_root=templates_root, to=to),
+                        "-o",
+                        str(out),
+                    ]
+                    commands.append(cmd)
+                    if not dry_run:
+                        runner(cmd, source_dir)
+                    env["pandoc_out"] = out
+                    continue
+
+                if kind == "vlna":
+                    vlna = _require_executable("vlna")
+                    inp = tmp / str(step["input"]).strip()
+                    out = tmp / str(step["output"]).strip()
+                    cmd = [
+                        vlna,
+                        "-f",
+                        "-l",
+                        "-m",
+                        "-n",
+                        str(inp),
+                        str(out),
+                    ]
+                    commands.append(cmd)
+                    if not dry_run:
+                        runner(cmd, tmp)
+                    env["vlna_out"] = out
+                    continue
+
+                if kind == "latexmk":
+                    latexmk = _require_executable("latexmk")
+                    engine = str(step.get("engine") or "lualatex").strip()
+                    main_name = str(step["main"]).strip()
+
+                    body = env.get("vlna_out") or env.get("pandoc_out")
+                    if not isinstance(body, Path):
+                        raise RuntimeError(
+                            "latexmk step requires prior pandoc output (and vlna "
+                            "output, if configured)."
+                        )
+
+                    if not dry_run:
+                        if not body.exists():
+                            raise RuntimeError(
+                                f"latexmk step missing prior output file: {body}"
+                            )
+
+                        latex_dir = _latex_templates_dir(templates_root)
+                        _copy_dir_contents(latex_dir, tmp)
+
+                        main = tmp / main_name
+                        if not main.exists():
+                            raise FileNotFoundError(
+                                f"LaTeX main template not found after copying: {main}"
+                            )
+
+                        (tmp / "body.tex").write_text(
+                            body.read_text(encoding="utf-8"),
                             encoding="utf-8",
                         )
 
-                    (tmp / "body.tex").write_text(
-                        body.read_text(encoding="utf-8"),
-                        encoding="utf-8",
-                    )
+                    cmd = [
+                        latexmk,
+                        "-pdf",
+                        "-interaction=nonstopmode",
+                        "-halt-on-error",
+                        "-file-line-error",
+                        "-e",
+                        f"$pdflatex=q/{engine} %O %S/;",
+                        str(main_name),
+                    ]
+                    commands.append(cmd)
+                    if not dry_run:
+                        runner(cmd, tmp)
 
-                cmd = [
-                    latexmk,
-                    "-pdf",
-                    "-interaction=nonstopmode",
-                    "-halt-on-error",
-                    "-file-line-error",
-                    "-e",
-                    f"$pdflatex=q/{engine} %O %S/;",
-                    str(main.name),
-                ]
-                commands.append(cmd)
-                if not dry_run:
-                    runner(cmd, tmp)
+                    built_pdf = tmp / "main.pdf"
+                    if not dry_run and not built_pdf.exists():
+                        raise RuntimeError(
+                            "latexmk finished without producing main.pdf"
+                        )
 
-                built_pdf = tmp / "main.pdf"
-                if not dry_run and not built_pdf.exists():
-                    raise RuntimeError("latexmk finished without producing main.pdf")
+                    if not dry_run:
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(built_pdf, output_path)
+                    continue
 
+                raise AssertionError(f"Unexpected step kind: {kind}")
+
+            if steps and str(steps[-1]["kind"]).strip() == "pandoc":
                 if not dry_run:
                     output_path.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(built_pdf, output_path)
-                continue
-
-            raise AssertionError(f"Unexpected step kind: {kind}")
-
-        if steps and str(steps[-1]["kind"]).strip() == "pandoc":
-            if not dry_run:
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(env["pandoc_out"], output_path)
+                    shutil.copyfile(env["pandoc_out"], output_path)
 
     return PipelineResult(output_path=output_path, commands=commands)
-
-
-def _try_find_repo_template(source_dir: Path) -> Path | None:
-    try:
-        repo_root = find_repo_root(source_dir)
-    except RepoConfigNotFoundError:
-        return None
-
-    candidate = repo_root / ".mcodex" / "templates" / "latex" / "main.tex"
-    if candidate.exists() and candidate.is_file():
-        return candidate
-    return None
-
-
-def _fallback_latex_template() -> str:
-    return """\\documentclass[12pt]{article}
-
-\\usepackage[a4paper,margin=25mm]{geometry}
-\\usepackage{fontspec}
-\\usepackage{microtype}
-\\usepackage{setspace}
-\\usepackage{parskip}
-\\usepackage{hyperref}
-
-\\providecommand{\\tightlist}{}
-
-\\setstretch{1.15}
-
-\\begin{document}
-\\input{body.tex}
-\\end{document}
-"""

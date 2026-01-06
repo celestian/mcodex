@@ -1,8 +1,11 @@
-% Placeholder LaTeX entrypoint.
-% Real pipeline templates will be introduced in a later step.
-\documentclass{article}
-\begin{document}
-\section*{mcodex}
-This is a placeholder template.
-\end{document}
+% mcodex LaTeX entrypoint.
+%
+% Copied into .mcodex/templates/latex/main.tex by `mcodex init`.
+% The default PDF pipeline expects this file and includes the generated body via
+% \input{body.tex}.
 
+\documentclass{article}
+
+\begin{document}
+\input{body.tex}
+\end{document}
