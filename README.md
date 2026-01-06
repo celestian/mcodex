@@ -8,6 +8,37 @@ around writing — in a way that is explicit, reproducible, and Git-based.
 
 ---
 
+## Install, upgrade, uninstall
+
+### Install
+
+Using uv (recommended for this repository):
+
+```bash
+uv pip install -e .
+```
+
+For development (linters + tests):
+
+```bash
+uv pip install -e ".[dev]"
+```
+
+### Upgrade
+
+If you installed from a Git checkout:
+
+```bash
+git pull
+uv pip install -e .
+```
+
+### Uninstall
+
+```bash
+uv pip uninstall mcodex
+```
+
 ## What mcodex is for
 
 mcodex answers questions like:

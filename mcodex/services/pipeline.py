@@ -247,7 +247,8 @@ def run_pipeline(
                         main = tmp / main_name
                         if not main.exists():
                             raise FileNotFoundError(
-                                f"LaTeX main template not found after copying: {main}"
+                                "LaTeX main template not found after copying: "
+                                f"{main}"
                             )
 
                         (tmp / "body.tex").write_text(

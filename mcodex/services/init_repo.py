@@ -69,7 +69,7 @@ def _write_default_config(path: Path) -> None:
     )
 
 
-def _copy_tree(src_pkg: str, src_subdir: str, dst_dir: Path) -> None:
+def _copy_tree(src_pkg: str, src_subdir: str, dst_dir: Path, *, force: bool) -> None:
     traversable = importlib.resources.files(src_pkg).joinpath(src_subdir)
 
     # Ensure we can use pathlib operations regardless of whether the package data
@@ -85,7 +85,7 @@ def _copy_tree(src_pkg: str, src_subdir: str, dst_dir: Path) -> None:
                 target.mkdir(parents=True, exist_ok=True)
                 continue
 
-            if target.exists():
+            if target.exists() and not force:
                 continue
 
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -101,7 +101,7 @@ def _ensure_gitignore_contains(repo_root: Path, line: str) -> None:
     gi.write_text(content, encoding="utf-8")
 
 
-def init_repo(repo_root: Path) -> None:
+def init_repo(repo_root: Path, *, force: bool = False) -> None:
     """Initialize mcodex project structure in a repository.
 
     Creates:
@@ -128,6 +128,11 @@ def init_repo(repo_root: Path) -> None:
     templates_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy packaged templates into the repo (variant A).
-    _copy_tree("mcodex.package_templates", "templates", templates_dir)
+    _copy_tree(
+        "mcodex.package_templates",
+        "templates",
+        templates_dir,
+        force=force,
+    )
 
     _ensure_gitignore_contains(root, "artifacts/")
