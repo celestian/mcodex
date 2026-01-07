@@ -15,8 +15,7 @@ from mcodex.services.pipeline_list import pipeline_list
 from mcodex.services.snapshot import snapshot_create, snapshot_list
 from mcodex.services.status import show_status
 from mcodex.services.text_authors import text_author_add, text_author_remove
-
-__version__ = "0.1.0"
+from mcodex.version import get_version
 
 _DOC = """
 mcodex
@@ -71,7 +70,7 @@ Snapshot:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = docopt(_DOC, argv=argv, version=f"mcodex {__version__}")
+    args = docopt(_DOC, argv=argv, version=f"mcodex {get_version()}")
 
     if args.get("init"):
         root = Path(args["--root"]).expanduser().resolve()
