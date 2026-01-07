@@ -51,6 +51,7 @@ def build(*, text_dir: Path, ref: str, pipeline: str = "pdf") -> Path:
         pipeline_name=pipeline_name,
         source_dir=source.source_dir,
         output_path=out_path,
+        version_label=source.version_label,
     )
     return out_path
 
@@ -140,7 +141,6 @@ def _resolve_source(*, text_dir: Path, version: str) -> BuildSource:
             raise NotADirectoryError(f"Snapshot is not a directory: {snap_dir}")
         return BuildSource(source_dir=snap_dir, version_label=label)
 
-    # Stage form: "draft" -> latest "draft-N"
     stage_candidate = label
     if stage_candidate.isalpha() and stage_candidate.islower():
         latest = _latest_snapshot_for_stage(text_dir, stage_candidate)

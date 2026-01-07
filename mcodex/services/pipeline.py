@@ -16,6 +16,7 @@ from mcodex.config import (
     get_pipeline,
     validate_pipelines,
 )
+from mcodex.services.build_context import write_build_context
 
 
 @dataclass(frozen=True)
@@ -135,6 +136,7 @@ def run_pipeline(
     output_path: Path,
     dry_run: bool = False,
     run: RunFn | None = None,
+    version_label: str = "worktree",
 ) -> PipelineResult:
     """Execute a configured pipeline.
 
@@ -171,6 +173,13 @@ def run_pipeline(
         with tempfile.TemporaryDirectory(prefix="mcodex-build-") as td:
             tmp = Path(td)
 
+            write_build_context(
+                tmp_dir=tmp,
+                source_dir=source_dir,
+                pipeline_name=pipeline_name,
+                version_label=version_label,
+            )
+
             env: dict[str, Path] = {
                 "source": src_md,
             }
@@ -194,7 +203,13 @@ def run_pipeline(
                         str(env["source"]),
                         f"--from={from_}",
                         f"--to={to}",
+                        f"--metadata-file={tmp / 'build_context.yaml'}",
                         *_pandoc_template_args(templates_root=templates_root, to=to),
+                        *(
+                            [f"--include-before-body={tmp / 'build_header.md'}"]
+                            if to in {"pdf", "docx"}
+                            else []
+                        ),
                         "-o",
                         str(out),
                     ]
@@ -247,8 +262,7 @@ def run_pipeline(
                         main = tmp / main_name
                         if not main.exists():
                             raise FileNotFoundError(
-                                "LaTeX main template not found after copying: "
-                                f"{main}"
+                                f"LaTeX main template not found after copying: {main}"
                             )
 
                         (tmp / "body.tex").write_text(

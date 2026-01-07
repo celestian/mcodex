@@ -54,5 +54,6 @@ def test_run_pipeline_dry_run_collects_commands(
     assert called == []
     assert len(result.commands) == 3
     assert result.commands[0][0].endswith("pandoc")
+    assert any(a.startswith("--metadata-file=") for a in result.commands[0])
     assert result.commands[1][0].endswith("vlna")
     assert result.commands[2][0].endswith("latexmk")

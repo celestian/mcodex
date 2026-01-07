@@ -6,6 +6,33 @@
 
 \documentclass{article}
 
+% Build context macros generated into context.tex.
+\input{context.tex}
+
 \begin{document}
+
+{\LARGE \McodexTitle}\\
+\vspace{0.5em}
+
+\ifx\McodexAuthors\empty\else
+{\small Authors: \McodexAuthors}\\
+\fi
+
+\ifx\McodexSnapshotLabel\empty
+  \ifx\McodexVersion\empty\else
+  {\small Version: \McodexVersion}\\
+  \fi
+\else
+  {\small Snapshot: \McodexSnapshotLabel}\\
+\fi
+
+\ifx\McodexBuiltAt\empty\else
+{\small Built: \McodexBuiltAt}\\
+\fi
+
+\vspace{1em}
+\hrule
+\vspace{1em}
+
 \input{body.tex}
 \end{document}
