@@ -19,6 +19,21 @@ def _write_repo_config(repo_root: Path, pipelines: dict) -> None:
 def _write_text_source(source_dir: Path) -> None:
     source_dir.mkdir(parents=True, exist_ok=True)
     (source_dir / "text.md").write_text("# Title\n", encoding="utf-8")
+    (source_dir / "metadata.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "metadata_version": 1,
+                "id": "x",
+                "title": "T",
+                "slug": "demo",
+                "created_at": "2026-01-03T00:00:00+01:00",
+                "authors": [],
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_pandoc_docx_uses_repo_reference_doc(monkeypatch, tmp_path: Path) -> None:
