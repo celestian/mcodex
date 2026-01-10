@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 from docopt import docopt
 
 from mcodex.cli_utils import locate_text_dir_for_build, locate_text_dir_for_snapshot
-from mcodex.errors import McodexError
 from mcodex.path_utils import normalize_path
 from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.build import build
@@ -80,14 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.get("pipeline") and args.get("list"):
-        try:
-            pipeline_list()
-        except McodexError as e:
-            print(str(e), file=sys.stderr)
-            return 2
-        except (FileNotFoundError, NotADirectoryError, RuntimeError, ValueError) as e:
-            print(str(e), file=sys.stderr)
-            return 2
+        pipeline_list()
         return 0
 
     # IMPORTANT: "text author ..." also sets args["author"] to True.
@@ -128,16 +119,8 @@ def main(argv: list[str] | None = None) -> int:
         ref = args["<ref>"]
         pipeline = args["--pipeline"]
 
-        try:
-            text_dir, resolved_ref = locate_text_dir_for_build(text=text, ref=ref)
-            out = build(text_dir=text_dir, ref=resolved_ref, pipeline=pipeline)
-        except McodexError as e:
-            print(str(e), file=sys.stderr)
-            return 2
-        except (FileNotFoundError, NotADirectoryError, RuntimeError) as e:
-            print(str(e), file=sys.stderr)
-            return 2
-
+        text_dir, resolved_ref = locate_text_dir_for_build(text=text, ref=ref)
+        out = build(text_dir=text_dir, ref=resolved_ref, pipeline=pipeline)
         print(out)
         return 0
 

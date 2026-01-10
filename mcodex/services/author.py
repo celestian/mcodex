@@ -3,6 +3,12 @@ from __future__ import annotations
 import re
 
 from mcodex.config import load_authors, save_authors
+from mcodex.errors import (
+    AuthorAlreadyExistsError,
+    AuthorNotFoundError,
+    InvalidEmailError,
+    InvalidNicknameError,
+)
 from mcodex.models import Author
 
 _NICK_RE = re.compile(r"^[a-zA-Z0-9_]+$")
@@ -11,16 +17,16 @@ _NICK_RE = re.compile(r"^[a-zA-Z0-9_]+$")
 def _validate_nickname(nickname: str) -> str:
     nick = nickname.strip()
     if not nick:
-        raise ValueError("Nickname must not be empty.")
+        raise InvalidNicknameError(nick)
     if not _NICK_RE.fullmatch(nick):
-        raise ValueError("Nickname must match: [a-zA-Z0-9_]+")
+        raise InvalidNicknameError(nick)
     return nick
 
 
 def _validate_email(email: str) -> str:
     e = email.strip()
     if not e or "@" not in e:
-        raise ValueError("Email must look like an email address.")
+        raise InvalidEmailError(e)
     return e
 
 
@@ -37,7 +43,7 @@ def author_add(*, nickname: str, first_name: str, last_name: str, email: str) ->
 
     authors = load_authors()
     if nick in authors:
-        raise ValueError(f"Author nickname already exists: {nick}")
+        raise AuthorAlreadyExistsError(nick)
 
     authors[nick] = Author(
         nickname=nick,
@@ -53,7 +59,7 @@ def author_remove(*, nickname: str) -> None:
     authors = load_authors()
 
     if nick not in authors:
-        raise ValueError(f"Author nickname not found: {nick}")
+        raise AuthorNotFoundError(nick)
 
     del authors[nick]
     save_authors(authors)

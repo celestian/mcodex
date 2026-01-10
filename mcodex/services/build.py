@@ -3,13 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from mcodex.config import (
-    DEFAULT_ARTIFACTS_DIR,
-    RepoConfigNotFoundError,
-    find_repo_root,
-    get_artifacts_dir,
-)
+from mcodex.config import DEFAULT_ARTIFACTS_DIR, find_repo_root, get_artifacts_dir
 from mcodex.constants import SNAPSHOT_LABEL_PATTERN
+from mcodex.errors import RepoConfigNotFoundError
 from mcodex.metadata import load_metadata
 from mcodex.path_utils import get_metadata_path, normalize_path
 from mcodex.services.pipeline import run_pipeline

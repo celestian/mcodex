@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from mcodex.config import find_repo_root, get_text_prefix, load_authors
+from mcodex.errors import InvalidTitleError
 from mcodex.metadata import LATEST_METADATA_VERSION
 from mcodex.models import Author, TextMetadata
 from mcodex.path_utils import normalize_path
@@ -19,7 +20,7 @@ _SLUG_ALLOWED_RE = re.compile(r"[^a-z0-9_]+")
 def normalize_title(title: str) -> str:
     raw = title.strip().lower()
     if not raw:
-        raise ValueError("Title must not be empty.")
+        raise InvalidTitleError("Title must not be empty.")
 
     no_diacritics = (
         unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
@@ -29,7 +30,7 @@ def normalize_title(title: str) -> str:
     cleaned = re.sub(r"_+", "_", cleaned).strip("_")
 
     if not cleaned:
-        raise ValueError(
+        raise InvalidTitleError(
             "Title is not usable after normalization (only unsupported characters)."
         )
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -41,6 +42,7 @@ def test_build_pdf_worktree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
         text: bool | None = None,
         capture_output: bool | None = None,
         check: bool | None = None,
+        **kwargs: Any,
     ) -> subprocess.CompletedProcess[str]:
         _ = text, capture_output, check
         cwd_path = Path(cwd or ".")
@@ -90,6 +92,7 @@ def test_build_pdf_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
         text: bool | None = None,
         capture_output: bool | None = None,
         check: bool | None = None,
+        **kwargs: Any,
     ) -> subprocess.CompletedProcess[str]:
         _ = text, capture_output, check
         cwd_path = Path(cwd or ".")

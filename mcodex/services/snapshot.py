@@ -13,6 +13,11 @@ from mcodex.constants import (
     SNAPSHOT_LABEL_PATTERN,
     SNAPSHOT_STAGES,
 )
+from mcodex.errors import (
+    GitOperationError,
+    GitRepoNotFoundError,
+    InvalidSnapshotLabelError,
+)
 from mcodex.metadata import load_metadata
 from mcodex.path_utils import get_metadata_path, normalize_path
 from mcodex.yaml_utils import safe_dump_yaml
@@ -24,10 +29,6 @@ _SNAP_RE = SNAPSHOT_LABEL_PATTERN
 _LABEL_RE = CUSTOM_LABEL_PATTERN
 
 
-class GitRepoNotFoundError(RuntimeError):
-    pass
-
-
 def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args],
@@ -35,13 +36,17 @@ def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
         text=True,
         capture_output=True,
         check=False,
+        timeout=30,
     )
 
 
 def _git_root_for(path: Path) -> Path:
     completed = _run_git(["rev-parse", "--show-toplevel"], cwd=path)
     if completed.returncode != 0:
-        raise GitRepoNotFoundError("Git repository not found")
+        # Check if it's a "not a git repository" error
+        if "not a git repository" in completed.stderr.lower():
+            raise GitRepoNotFoundError()
+        raise GitOperationError("rev-parse", completed.stdout, completed.stderr)
     return Path(completed.stdout.strip()).expanduser().resolve()
 
 
@@ -180,9 +185,9 @@ def snapshot_create(*, text_dir: Path, label: str, note: str | None) -> Path:
 
     safe_label = normalize_snapshot_label(text_dir=tdir, label_or_stage=label)
     if not safe_label:
-        raise ValueError("Snapshot label must not be empty.")
+        raise InvalidSnapshotLabelError("Snapshot label must not be empty.")
     if not _LABEL_RE.match(safe_label):
-        raise ValueError(
+        raise InvalidSnapshotLabelError(
             "Invalid snapshot label. Allowed: letters, digits, '.', '_', '-' "
             "(must start with letter or digit)."
         )
@@ -219,9 +224,7 @@ def snapshot_create(*, text_dir: Path, label: str, note: str | None) -> Path:
 
     add_cp = _run_git(["add", str(rel_snap_dir)], cwd=repo_root)
     if add_cp.returncode != 0:
-        raise RuntimeError(
-            f"Git add failed:\nout: {add_cp.stdout}\nerr: {add_cp.stderr}\n"
-        )
+        raise GitOperationError("add", add_cp.stdout, add_cp.stderr)
 
     msg = _format_commit_message(
         repo_root=repo_root,
@@ -232,15 +235,11 @@ def snapshot_create(*, text_dir: Path, label: str, note: str | None) -> Path:
 
     commit_cp = _run_git(["commit", "-m", msg], cwd=repo_root)
     if commit_cp.returncode != 0:
-        raise RuntimeError(
-            f"Git commit failed:\nout: {commit_cp.stdout}\nerr: {commit_cp.stderr}\n"
-        )
+        raise GitOperationError("commit", commit_cp.stdout, commit_cp.stderr)
 
     tag_cp = _run_git(["tag", tag], cwd=repo_root)
     if tag_cp.returncode != 0:
-        raise RuntimeError(
-            f"Git tag failed:\nout: {tag_cp.stdout}\nerr: {tag_cp.stderr}\n"
-        )
+        raise GitOperationError("tag", tag_cp.stdout, tag_cp.stderr)
 
     return snap_dir
 

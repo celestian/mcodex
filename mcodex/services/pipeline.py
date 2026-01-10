@@ -11,11 +11,11 @@ from pathlib import Path
 
 from mcodex.config import (
     DEFAULT_PIPELINES,
-    RepoConfigNotFoundError,
     find_repo_root,
     get_pipeline,
     validate_pipelines,
 )
+from mcodex.errors import BuildToolError, RepoConfigNotFoundError
 from mcodex.services.build_context import write_build_context
 
 
@@ -45,24 +45,14 @@ def _default_run(cmd: list[str], cwd: Path) -> None:
         text=True,
         capture_output=True,
         check=False,
+        timeout=300,  # 5 minutes
     )
     if completed.returncode == 0:
         return
 
-    stdout = (completed.stdout or "").strip()
-    stderr = (completed.stderr or "").strip()
-
-    parts: list[str] = [f"Command failed: {' '.join(cmd)}"]
-    if stdout:
-        parts.append("--- stdout ---")
-        parts.append(stdout)
-    if stderr:
-        parts.append("--- stderr ---")
-        parts.append(stderr)
-    if not stdout and not stderr:
-        parts.append("(no output)")
-
-    raise RuntimeError("\n".join(parts))
+    tool = cmd[0] if cmd else "unknown"
+    output = "\n".join(filter(None, [completed.stdout, completed.stderr]))
+    raise BuildToolError(tool, completed.returncode, output)
 
 
 def _copy_dir_contents(src_dir: Path, dst_dir: Path) -> None:

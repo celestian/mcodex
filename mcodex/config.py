@@ -5,15 +5,14 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from mcodex.errors import PipelineConfigError, PipelineNotFoundError
+from mcodex.errors import (
+    PipelineConfigError,
+    PipelineNotFoundError,
+    RepoConfigNotFoundError,
+)
 from mcodex.models import Author
 from mcodex.path_utils import normalize_path
 from mcodex.yaml_utils import safe_dump_yaml, safe_load_yaml
-
-
-class RepoConfigNotFoundError(FileNotFoundError):
-    """Raised when no `.mcodex/config.yaml` can be found by walking upwards."""
-
 
 DEFAULT_ARTIFACTS_DIR = "artifacts"
 DEFAULT_SNAPSHOT_COMMIT_TEMPLATE = "Snapshot: {slug} / {label} — {note}"
@@ -73,9 +72,7 @@ def find_repo_root(start: Path | None = None) -> Path:
         if repo_config_path(candidate).exists():
             return candidate
 
-    raise RepoConfigNotFoundError(
-        "No .mcodex/config.yaml found. Run `mcodex init` in a Git repo first."
-    )
+    raise RepoConfigNotFoundError()
 
 
 def load_config(

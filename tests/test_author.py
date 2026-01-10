@@ -4,6 +4,12 @@ from pathlib import Path
 
 import pytest
 
+from mcodex.errors import (
+    AuthorAlreadyExistsError,
+    AuthorNotFoundError,
+    InvalidEmailError,
+    InvalidNicknameError,
+)
 from mcodex.services.author import author_add, author_list, author_remove
 
 
@@ -37,7 +43,7 @@ def test_author_add_rejects_duplicate_nickname() -> None:
         email="eva@example.com",
     )
 
-    with pytest.raises(ValueError, match="already exists"):
+    with pytest.raises(AuthorAlreadyExistsError):
         author_add(
             nickname="eva",
             first_name="Eva",
@@ -47,7 +53,7 @@ def test_author_add_rejects_duplicate_nickname() -> None:
 
 
 def test_author_add_rejects_invalid_nickname_characters() -> None:
-    with pytest.raises(ValueError, match="Nickname must match"):
+    with pytest.raises(InvalidNicknameError):
         author_add(
             nickname="eva nová",
             first_name="Eva",
@@ -57,7 +63,7 @@ def test_author_add_rejects_invalid_nickname_characters() -> None:
 
 
 def test_author_add_rejects_bad_email() -> None:
-    with pytest.raises(ValueError, match="Email must look like"):
+    with pytest.raises(InvalidEmailError):
         author_add(
             nickname="badmail",
             first_name="Bad",
@@ -81,7 +87,7 @@ def test_author_remove_makes_list_empty(capsys: pytest.CaptureFixture[str]) -> N
 
 
 def test_author_remove_missing() -> None:
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(AuthorNotFoundError):
         author_remove(nickname="missing")
 
 
