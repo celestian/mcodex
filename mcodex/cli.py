@@ -7,6 +7,7 @@ from docopt import docopt
 
 from mcodex.cli_utils import locate_text_dir_for_build, locate_text_dir_for_snapshot
 from mcodex.errors import McodexError
+from mcodex.path_utils import normalize_path
 from mcodex.services.author import author_add, author_list, author_remove
 from mcodex.services.build import build
 from mcodex.services.create_text import create_text
@@ -73,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     args = docopt(_DOC, argv=argv, version=f"mcodex {get_version()}")
 
     if args.get("init"):
-        root = Path(args["--root"]).expanduser().resolve()
+        root = normalize_path(Path(args["--root"]))
         init_repo(root, force=bool(args["--force"]))
         print(f"Initialized mcodex in: {root}")
         return 0

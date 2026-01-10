@@ -6,10 +6,7 @@ from pathlib import Path
 from mcodex.config import load_authors
 from mcodex.metadata import load_metadata, write_metadata
 from mcodex.models import Author
-
-
-def _metadata_path(text_dir: Path) -> Path:
-    return text_dir.expanduser().resolve() / "metadata.yaml"
+from mcodex.path_utils import get_metadata_path
 
 
 def _author_from_config(nickname: str) -> Author:
@@ -20,7 +17,7 @@ def _author_from_config(nickname: str) -> Author:
 
 
 def text_author_add(*, text_dir: Path, nickname: str) -> None:
-    meta_path = _metadata_path(text_dir)
+    meta_path = get_metadata_path(text_dir)
     data = load_metadata(meta_path)
 
     author = _author_from_config(nickname)
@@ -43,7 +40,7 @@ def text_author_add(*, text_dir: Path, nickname: str) -> None:
 
 
 def text_author_remove(*, text_dir: Path, nickname: str) -> None:
-    meta_path = _metadata_path(text_dir)
+    meta_path = get_metadata_path(text_dir)
     data = load_metadata(meta_path)
 
     authors = data.get("authors")

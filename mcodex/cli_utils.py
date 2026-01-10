@@ -3,8 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from mcodex.config import find_repo_root, get_text_prefix, is_under_repo
-
-_METADATA = "metadata.yaml"
+from mcodex.path_utils import get_metadata_path, normalize_path
 
 
 def resolve_text_dir(text_dir: str | None) -> Path:
@@ -17,10 +16,10 @@ def resolve_text_dir(text_dir: str | None) -> Path:
     If `text_dir` is None, this uses the current working directory, but only if
     it contains metadata.yaml.
     """
-    cwd = Path.cwd().expanduser().resolve()
+    cwd = normalize_path(Path.cwd())
 
     if text_dir is None:
-        meta = cwd / _METADATA
+        meta = get_metadata_path(cwd)
         if not meta.exists():
             raise FileNotFoundError(
                 "No metadata.yaml found in current directory. "
@@ -44,7 +43,7 @@ def resolve_text_dir(text_dir: str | None) -> Path:
 def locate_text_dir_for_build(*, text: str | None, ref: str | None) -> tuple[Path, str]:
     """Locate a text directory and determine the ref selector for `mcodex build`."""
 
-    cwd = Path.cwd().expanduser().resolve()
+    cwd = normalize_path(Path.cwd())
     in_text_dir = _is_text_dir(cwd)
     in_repo = is_under_repo(cwd)
 
@@ -85,7 +84,7 @@ def locate_text_dir_for_build(*, text: str | None, ref: str | None) -> tuple[Pat
 def locate_text_dir_for_snapshot(*, text: str | None) -> Path:
     """Locate a text directory for `mcodex snapshot`."""
 
-    cwd = Path.cwd().expanduser().resolve()
+    cwd = normalize_path(Path.cwd())
     in_text_dir = _is_text_dir(cwd)
     in_repo = is_under_repo(cwd)
 
@@ -111,7 +110,7 @@ def locate_text_dir_for_snapshot(*, text: str | None) -> Path:
 
 
 def _is_text_dir(path: Path) -> bool:
-    return (path / _METADATA).is_file()
+    return get_metadata_path(path).is_file()
 
 
 def _resolve_text_arg(
@@ -127,8 +126,8 @@ def _resolve_text_arg(
 
     # Path form
     if candidate.exists():
-        resolved = candidate.resolve()
-        meta = resolved / _METADATA
+        resolved = normalize_path(candidate)
+        meta = get_metadata_path(resolved)
         if not meta.exists():
             raise FileNotFoundError(f"No metadata.yaml found: {meta}")
         return resolved
@@ -139,8 +138,8 @@ def _resolve_text_arg(
 
     repo_root = find_repo_root(cwd)
     prefix = get_text_prefix(repo_root=repo_root)
-    text_dir = (repo_root / f"{prefix}{text}").expanduser().resolve()
-    meta = text_dir / _METADATA
+    text_dir = normalize_path(repo_root / f"{prefix}{text}")
+    meta = get_metadata_path(text_dir)
 
     if not meta.exists():
         raise FileNotFoundError(not_found_template.format(text=text, meta=meta))

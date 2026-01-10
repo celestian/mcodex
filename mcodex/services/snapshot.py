@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 from collections.abc import Iterable
@@ -8,16 +7,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from mcodex.config import get_snapshot_commit_template
+from mcodex.constants import (
+    CUSTOM_LABEL_PATTERN,
+    SNAPSHOT_LABEL_PATTERN,
+    SNAPSHOT_STAGES,
+)
 from mcodex.metadata import load_metadata
+from mcodex.path_utils import get_metadata_path, normalize_path
+from mcodex.yaml_utils import safe_dump_yaml
 
-_STAGES: list[str] = ["draft", "preview", "rc", "final", "published"]
+_STAGES: list[str] = SNAPSHOT_STAGES
 _STAGE_INDEX: dict[str, int] = {s: i for i, s in enumerate(_STAGES)}
 
-_SNAP_RE = re.compile(r"^(?P<stage>[a-z]+)-(?P<num>[0-9]+)$")
-_LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_SNAP_RE = SNAPSHOT_LABEL_PATTERN
+_LABEL_RE = CUSTOM_LABEL_PATTERN
 
 
 class GitRepoNotFoundError(RuntimeError):
@@ -68,7 +72,7 @@ def _highest_stage_index(text_dir: Path) -> int | None:
 
 
 def available_stages(*, text_dir: Path) -> list[str]:
-    tdir = text_dir.expanduser().resolve()
+    tdir = normalize_path(text_dir)
     highest = _highest_stage_index(tdir)
     if highest is None:
         return _STAGES[:]
@@ -76,7 +80,7 @@ def available_stages(*, text_dir: Path) -> list[str]:
 
 
 def current_stage(*, text_dir: Path) -> str | None:
-    tdir = text_dir.expanduser().resolve()
+    tdir = normalize_path(text_dir)
     highest = _highest_stage_index(tdir)
     if highest is None:
         return None
@@ -102,7 +106,7 @@ def normalize_snapshot_label(*, text_dir: Path, label_or_stage: str) -> str:
       (e.g. "draft-3").
     - Otherwise, treat it as an explicit label (e.g. "draft-7", "sent-to-editor").
     """
-    tdir = text_dir.expanduser().resolve()
+    tdir = normalize_path(text_dir)
     raw = str(label_or_stage).strip()
 
     if raw in _STAGES:
@@ -144,10 +148,7 @@ def _write_snapshot_yaml(
     }
     if note:
         payload["note"] = note
-    path.write_text(
-        yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    safe_dump_yaml(payload, path)
 
 
 def _format_commit_message(
@@ -175,7 +176,7 @@ def _extract_metadata_dict(result: Any) -> dict[str, Any]:
 
 
 def snapshot_create(*, text_dir: Path, label: str, note: str | None) -> Path:
-    tdir = text_dir.expanduser().resolve()
+    tdir = normalize_path(text_dir)
 
     safe_label = normalize_snapshot_label(text_dir=tdir, label_or_stage=label)
     if not safe_label:
@@ -188,7 +189,7 @@ def snapshot_create(*, text_dir: Path, label: str, note: str | None) -> Path:
 
     repo_root = _git_root_for(tdir)
 
-    meta_path = tdir / "metadata.yaml"
+    meta_path = get_metadata_path(tdir)
     meta = _extract_metadata_dict(load_metadata(meta_path))
     slug = str(meta.get("slug") or tdir.name)
 
@@ -245,7 +246,7 @@ def snapshot_create(*, text_dir: Path, label: str, note: str | None) -> Path:
 
 
 def snapshot_list(*, text_dir: Path) -> None:
-    tdir = text_dir.expanduser().resolve()
+    tdir = normalize_path(text_dir)
     items = sorted(_list_snapshot_dirs(tdir), key=lambda p: p.name)
     if not items:
         print("No snapshots found.")

@@ -5,10 +5,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from mcodex.errors import PipelineConfigError, PipelineNotFoundError
 from mcodex.models import Author
+from mcodex.path_utils import normalize_path
+from mcodex.yaml_utils import safe_dump_yaml, safe_load_yaml
 
 
 class RepoConfigNotFoundError(FileNotFoundError):
@@ -52,7 +52,7 @@ DEFAULT_PIPELINES: dict[str, Any] = {
 
 
 def repo_config_path(repo_root: Path) -> Path:
-    return repo_root.expanduser().resolve() / ".mcodex" / "config.yaml"
+    return normalize_path(repo_root) / ".mcodex" / "config.yaml"
 
 
 def find_repo_root(start: Path | None = None) -> Path:
@@ -65,7 +65,7 @@ def find_repo_root(start: Path | None = None) -> Path:
         RepoConfigNotFoundError: if no repo config anchor is found.
     """
 
-    p = (start or Path.cwd()).expanduser().resolve()
+    p = normalize_path(start or Path.cwd())
     if p.is_file():
         p = p.parent
 
@@ -87,10 +87,7 @@ def load_config(
     cfg_path = repo_config_path(root)
     if not cfg_path.exists():
         return {}
-    data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError("Invalid config: root must be a mapping.")
-    return data
+    return safe_load_yaml(cfg_path)
 
 
 def save_config(
@@ -102,10 +99,7 @@ def save_config(
     root = repo_root or find_repo_root(start)
     cfg_path = repo_config_path(root)
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
-    cfg_path.write_text(
-        yaml.safe_dump(config, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    safe_dump_yaml(config, cfg_path)
 
 
 def ensure_defaults(
@@ -355,5 +349,5 @@ def validate_allowed_roots(roots: Iterable[Path]) -> list[Path]:
 
     out: list[Path] = []
     for r in roots:
-        out.append(r.expanduser().resolve())
+        out.append(normalize_path(r))
     return out

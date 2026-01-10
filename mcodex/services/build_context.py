@@ -5,9 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from mcodex.metadata import load_metadata
+from mcodex.yaml_utils import safe_dump_yaml, safe_load_yaml
 
 
 @dataclass(frozen=True)
@@ -21,10 +20,7 @@ class BuildContextResult:
 def _load_optional_yaml(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"Invalid YAML mapping: {path}")
-    return data
+    return safe_load_yaml(path)
 
 
 def _authors_as_nicknames(meta: dict[str, Any]) -> list[str]:
@@ -154,10 +150,7 @@ def write_build_context(
     }
 
     yaml_path = tmp_dir / "build_context.yaml"
-    yaml_path.write_text(
-        yaml.safe_dump(context, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    safe_dump_yaml(context, yaml_path)
 
     header_md_path = tmp_dir / "build_header.md"
     header_md_path.write_text(_format_header_md(context), encoding="utf-8")

@@ -55,4 +55,3 @@ def get_version() -> str:
         return version
 
     return "0.0.0"
-

@@ -4,7 +4,7 @@ import importlib.resources
 from pathlib import Path
 from typing import Any
 
-import yaml
+from mcodex.yaml_utils import safe_dump_yaml
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "artifacts_dir": "artifacts",
@@ -63,10 +63,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 def _write_default_config(path: Path) -> None:
-    path.write_text(
-        yaml.safe_dump(DEFAULT_CONFIG, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    safe_dump_yaml(DEFAULT_CONFIG, path)
 
 
 def _copy_tree(src_pkg: str, src_subdir: str, dst_dir: Path, *, force: bool) -> None:

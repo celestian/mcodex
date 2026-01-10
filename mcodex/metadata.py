@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
+from mcodex.yaml_utils import safe_dump_yaml, safe_load_yaml
 
 LATEST_METADATA_VERSION = 1
 
@@ -12,9 +12,7 @@ def load_metadata(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Metadata file not found: {path}")
 
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError("Invalid metadata: root must be a mapping.")
+    data = safe_load_yaml(path)
 
     upgraded, changed = upgrade_metadata(data)
     if changed:
@@ -24,10 +22,7 @@ def load_metadata(path: Path) -> dict[str, Any]:
 
 
 def write_metadata(path: Path, data: dict[str, Any]) -> None:
-    path.write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    safe_dump_yaml(data, path)
 
 
 def upgrade_metadata(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:

@@ -34,4 +34,3 @@ def test_get_version_falls_back_to_pyproject(monkeypatch, tmp_path: Path) -> Non
     monkeypatch.setattr(version_module, "_get_pyproject_path", lambda: pyproject_path)
 
     assert version_module.get_version() == "9.9.9"
-

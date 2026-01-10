@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,10 +9,12 @@ from mcodex.config import (
     find_repo_root,
     get_artifacts_dir,
 )
+from mcodex.constants import SNAPSHOT_LABEL_PATTERN
 from mcodex.metadata import load_metadata
+from mcodex.path_utils import get_metadata_path, normalize_path
 from mcodex.services.pipeline import run_pipeline
 
-_SNAP_RE = re.compile(r"^(?P<stage>[a-z]+)-(?P<num>[0-9]+)$")
+_SNAP_RE = SNAPSHOT_LABEL_PATTERN
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,7 @@ def build(*, text_dir: Path, ref: str, pipeline: str = "pdf") -> Path:
     if pipeline_name == "noop":
         return _build_noop(text_dir=text_dir, version=ref)
 
-    text_dir = text_dir.expanduser().resolve()
+    text_dir = normalize_path(text_dir)
     source = _resolve_source(text_dir=text_dir, version=ref)
     slug = _load_slug(source.source_dir)
 
@@ -152,7 +153,7 @@ def _resolve_source(*, text_dir: Path, version: str) -> BuildSource:
 
 
 def _load_slug(source_dir: Path) -> str:
-    meta = load_metadata(source_dir / "metadata.yaml")
+    meta = load_metadata(get_metadata_path(source_dir))
     slug = str(meta.get("slug") or "").strip()
     if slug:
         return slug
